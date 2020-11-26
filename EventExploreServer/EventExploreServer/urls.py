@@ -22,7 +22,8 @@ urlpatterns = [
     # path('admin/', admin.site.urls),
     path(r'test', view.index, name='index'),
     # url(r'^query/(\w*)/', view.search_relative_articles),  # 位置参数
-    url(r'^query/(?P<topic>\S{1,})/$', view.search_relative_articles),  # 关键字参数
+    # url(r'^query/(?P<topic>\S{1,})/$', view.search_relative_articles),  # 关键字参数
+    url(r'^query/(?P<topic>\S{1,})/$', view.SearchView.as_view()),  # 关键字参数
 ]
 '''
 路由配置模块就是ulrpatterns列表，列表的每个元素都是一项path
