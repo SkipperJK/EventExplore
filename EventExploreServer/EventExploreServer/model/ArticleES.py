@@ -4,6 +4,19 @@ from EventExploreServer.utils.utils import split_sentence
 class ArticleES:
 
     def __init__(self, id, url, title, content, time, media_show, media_level, qscore, thumb, score):
+        """
+        ES召回的文章对象
+        :param id: int
+        :param url: str
+        :param title: str
+        :param content: str
+        :param time: str
+        :param media_show: str
+        :param media_level: str TODO; 索引返回是str
+        :param qscore: str TODO; 索引返回是str
+        :param thumb: str
+        :param score: float
+        """
         self.id = id
         self.url = url
         self.title = title
