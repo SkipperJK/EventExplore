@@ -66,7 +66,7 @@ class TripleUnit:
         else:
             self.entity2_list = [entity2_list]
 
-        debug_logger.debug('Entity 是什么：：：{},{}'.format(self.entity1_list, self.entity2_list))
+        # debug_logger.debug('Entity 是什么：：：{},{}'.format(self.entity1_list, self.entity2_list))
         self.e1_lemma = ''.join([word.lemma for word in self.entity1_list])
         self.relation_lemma = ''.join([word.lemma for word in self.relationship_list])
         self.e2_lemma = ''.join([word.lemma for word in self.entity2_list])

@@ -21,9 +21,12 @@ from EventExploreServer import view
 urlpatterns = [
     # path('admin/', admin.site.urls),
     path(r'test', view.index, name='index'),
+    path(r'echart', view.echart_test, name='echart'),
     # url(r'^query/(\w*)/', view.search_relative_articles),  # 位置参数
     # url(r'^query/(?P<topic>\S{1,})/$', view.search_relative_articles),  # 关键字参数
     url(r'^query/(?P<topic>\S{1,})/$', view.SearchView.as_view()),  # 关键字参数
+    url(r'^extract/(?P<text>\S{1,})/$', view.OpenIEView.as_view()),
+    url(r'^explore/(?P<topic>\S{1,})/$', view.EventExplore.as_view()),
 ]
 '''
 路由配置模块就是ulrpatterns列表，列表的每个元素都是一项path
