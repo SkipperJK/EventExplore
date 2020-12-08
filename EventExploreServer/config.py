@@ -14,6 +14,7 @@ MONGODB_HOST = "10.176.24.41"
 MONGODB_PORT = 27017
 MONGODB_DATABASE_NAME = "Sina"
 MONGODB_ARTICLE_COLLECTION = "article20191121_sim"
+MONGODB_ENTMT_COLLECTION = "article20190413_sim"
 BULK_SIZE = 2000
 
 
@@ -35,6 +36,19 @@ ES_FIELD_MAPPING = {
     "thumb": "thumb"
 }
 
+ENTMT_ES_INDEX = "sina_article_entmt"
+ENTMT_ES_FIELD_MAPPING = {
+    "_id": "id",
+    "url": "url",
+    "time": "time",
+    "title": "title",
+    "content": "content",
+    "imgUrls": "imgs",
+    "source": "source",
+    "channel": "channel",
+    "tags": "tags",
+    "types": "types"
+}
 
 # pytlp
 LTP_MODEL_DIR = os.path.join(PROJECT_DIR, 'data/pretrained_model/LTPModel')

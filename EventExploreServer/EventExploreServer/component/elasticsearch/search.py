@@ -39,18 +39,6 @@ def search_articles(topic ='', size=10000):
         "query":{
             "bool": {
                 "must":[
-                # "should": [
-                #     {
-                #       # "match": {
-                #       "match_phrase":{
-                #         "title": topic
-                #       }
-                #     },
-                    # {
-                    #   "match": {
-                    #     "content": keywords
-                    #   }
-                    # }
                 ]
             }
         }
@@ -101,11 +89,12 @@ class TESTES(TestCase):
         topic = "马航MH370"
         topic = "艾塞罗比亚"
         topic = "埃塞俄比亚"
-        # topic = '奥斯卡提名'
+        topic = '奥斯卡提名'
         articles = search_articles(topic, 200)
         scores = []
         for idx, article in enumerate(articles):
             debug_logger.debug("idx: {},id: {} score: {} title: {}".format(idx, article.id, article.score, article.title))
+            debug_logger.debug(article.__dict__)
             scores.append(article.score)
             # print(article.__dict__)
             # debug_logger.debug(article.__dict__)
