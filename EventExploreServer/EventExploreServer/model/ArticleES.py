@@ -3,7 +3,10 @@ from EventExploreServer.utils.utils import split_sentence
 
 class ArticleES:
 
-    def __init__(self, id, url, title, content, time, media_show, media_level, qscore, thumb, score):
+    def __init__(self, id, url, title, content, time,
+                 media_show=None, media_level=None, qscore=None, thumb=None,
+                 imgs=None, source=None, channel=None, types=None, tags=None,
+                 score=0):
         """
         ES召回的文章对象
         :param id: int
@@ -26,7 +29,13 @@ class ArticleES:
         self.media_level = media_level
         self.qscore = qscore
         self.thumb = thumb
+        self.imgs = imgs
+        self.source = source
+        self.channel = channel
+        self.types = types
+        self.tags = tags
         self.score = score
+
 
 
     @property
