@@ -3,6 +3,8 @@ import unittest
 
 
 def split_sentence(content):
+    content = content.replace("\t", "")
+    content = content.replace(" ", "")
     content = re.sub('([。！？\?])([^”’])', r"\1\n\2", content)  # 单字符断句符, [^"']中括号中的^表示非。
     content = re.sub('(\.{6})([^”’])', r"\1\n\2", content)  # 英文省略号
     content = re.sub('(\…{2})([^”’])', r"\1\n\2", content)  # 中文省略号
@@ -10,7 +12,12 @@ def split_sentence(content):
     # 如果双引号前有终止符，那么双引号才是句子的终点，把分句符\n放到双引号后，注意前面的几句都小心保留了双引号
     content = content.rstrip()  # 段尾如果有多余的\n就去掉它
     # 很多规则中会考虑分号;，但是这里我把它忽略不计，破折号、英文双引号等同样忽略，需要的再做些简单调整即可。
-    return content.split("\n")
+    sentences = content.split("\n")
+    ret_sents = []
+    for sent in sentences:
+        sent.replace("\t", "").replace("\n", "").replace(" ", "")
+        if sent: ret_sents.append(sent)
+    return ret_sents
 
 
 def find_sub_obj(trigger, words):
@@ -28,17 +35,32 @@ def find_sub_obj(trigger, words):
     return sub, obj
 
 
-def is_entity(word):   # 这个不对，不够通用，需要修改
-    """判断词单元是否实体
-    Args:
-        entry: WordUnit，词单元
-    Returns:
-        *: bool，实体(True)，非实体(False)
+def is_entity(word):
+    """
+    判断一个词是否是指定的实体类型
+    :param entry: WordUnit
+    :return:
     """
     # 候选实体词性列表
     # 人名，机构名，地名，其他名词，缩略词 --- 添加：时间名词nt    TODO; 后面添加更多可能的实体类型，数字等等
-    entity_postags = {'nh', 'ni', 'ns', 'nz', 'j', 'nt'}
-    if word.postag in entity_postags:
+    # entity_postags = {'nh', 'ni', 'ns', 'nz', 'j', 'nt', 'nl'} # nl 位置名词
+    postags = {'nh', 'ni', 'ns', 'nz', 'j'}
+    if word.postag in postags:
+        return True
+    else:
+        return False
+
+
+def is_named_entity(word):
+    """
+            判断一个词是否是 人名，地名，机构名 三种命名实体类型
+            :param entry:  WordUnit
+            :return:
+            """
+    postags = {'nh', 'ni', 'ns', 'nz'}
+    nertags = {'Nh', 'Ns', 'Ni'}
+
+    if (word.postag in postags) or (word.nertag in nertags):
         return True
     else:
         return False
