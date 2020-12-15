@@ -4,14 +4,65 @@ from django.test import TestCase
 from config import ES_HOSTS, ES_INDEX
 import jieba.posseg as pseg
 from elasticsearch import Elasticsearch
+from elasticsearch.helpers import scan
 from EventExploreServer.model.ArticleES import ArticleES
 
 es = Elasticsearch(ES_HOSTS)
 debug_logger = logging.getLogger('debug')
 root_logger = logging.getLogger('root')
 
+def search_all(index, size=10):
+    """
+    检索指定索引中的所有文章
+    TODO；根据文章types过滤
+    :param index:
+    :return:
+    """
+    action = {
+        "query": {
+            "match_all": {}
+        }
+    }
+    articles = []
+    resps = scan(es, action, scroll="10m", index=index)
+    count = 0
+    for item in resps:
+        if count >= size: break
+        # score = item['_score']
+        source = item['_source']
+        articles.append(ArticleES(**source))
+        count += 1
+    return articles
 
-def search_articles(topic ='', size=10000):
+
+def search_articles(text, index, size):
+
+    action = {
+        "size": size,
+        "query": {
+            "bool": {
+                "must": [
+                    {"match": {"title": text}}
+                ],
+                "should": [
+                    {"match": {"content": text}}
+                ]
+            }
+        }
+    }
+
+    response = es.search(body=action, index=index)
+    articles = []
+    for articleDict in response["hits"]["hits"]:
+        score = articleDict['_score']
+        source = articleDict['_source']
+        source['score'] = score
+        articles.append(ArticleES(**source))
+    return articles
+
+
+
+def exact_search_articles(topic ='', size=10000, index=ES_INDEX):
     """
     TODO 有三种，title和content
     TODO; 通过词性标注/命名体识别来决定要不要must match
@@ -48,7 +99,7 @@ def search_articles(topic ='', size=10000):
         action["query"]["bool"]["must"].append({'match': {"title": word}})
     root_logger.info(action)
 
-    response = es.search(body=action, index=ES_INDEX) # ES返回的是dict类型，
+    response = es.search(body=action, index=index) # ES返回的是dict类型，
     articles = []
     for articleDict in response["hits"]["hits"]:
         # articles.append(ArticleES(**articleDict['_source']))
@@ -83,22 +134,37 @@ def find_point(scores):
 
 class TESTES(TestCase):
 
+    def test_search_all(self):
+        from config import ENTMT_ES_INDEX
+        arts = search_all(ENTMT_ES_INDEX)
+        print(len(arts))
+
+
     def test_search(self):
+        text = "奥斯卡提名"
+        from config import ENTMT_ES_INDEX
+        arts = search_articles(text, ENTMT_ES_INDEX, 100)
+        debug_logger.setLevel(logging.DEBUG)
+        for idx, art in enumerate(arts):
+            debug_logger.debug(art.__dict__)
+
+
+    def test_extract_search(self):
         topic = '中国'
         topic = '吴昕金牛座男友'
         topic = "马航MH370"
         topic = "艾塞罗比亚"
         topic = "埃塞俄比亚"
         topic = '奥斯卡提名'
-        articles = search_articles(topic, 200)
+        articles = exact_search_articles(topic, 200)
         scores = []
+        debug_logger.setLevel(logging.DEBUG)
         for idx, article in enumerate(articles):
             debug_logger.debug("idx: {},id: {} score: {} title: {}".format(idx, article.id, article.score, article.title))
             debug_logger.debug(article.__dict__)
             scores.append(article.score)
             # print(article.__dict__)
             # debug_logger.debug(article.__dict__)
-
 
     '''ES return item
     {
