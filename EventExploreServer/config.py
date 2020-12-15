@@ -54,3 +54,5 @@ ENTMT_ES_FIELD_MAPPING = {
 LTP_MODEL_DIR = os.path.join(PROJECT_DIR, 'data/pretrained_model/LTPModel')
 LTP4_MODEL_DIR = os.path.join(PROJECT_DIR, 'data/pretrained_model/LTPModel')
 USER_DICT_DIR = os.path.join(PROJECT_DIR, 'data/user_dicts')
+
+ENTITY_DIR = os.path.join(PROJECT_DIR, 'data/entity')

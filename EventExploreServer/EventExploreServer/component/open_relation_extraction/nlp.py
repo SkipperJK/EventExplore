@@ -1,6 +1,7 @@
+import os
 import logging
 from ltp import LTP
-from config import LTP4_MODEL_DIR
+from config import LTP4_MODEL_DIR, USER_DICT_DIR
 from EventExploreServer.model.Word import WordUnit
 from EventExploreServer.model.Sentence import SentenceUnit
 
@@ -13,8 +14,10 @@ class NLP:
 
     """
 
-    def __init__(self, default_model_dir = LTP4_MODEL_DIR):
+    def __init__(self, default_model_dir = LTP4_MODEL_DIR, user_dict_dir = USER_DICT_DIR):
         self.ltp = LTP(path=default_model_dir)
+        for file in os.listdir(user_dict_dir):
+            self.ltp.init_dict(path=os.path.join(user_dict_dir, file))
 
     def segment(self, sentences):
         lemmas, hidden = self.ltp.seg(sentences)
