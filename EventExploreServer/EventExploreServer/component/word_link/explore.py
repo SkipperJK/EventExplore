@@ -1,6 +1,6 @@
 import logging
 from django.test import TestCase
-from EventExploreServer.component import search_articles, extract_article
+from EventExploreServer.component import exact_search_articles, extract_article
 from EventExploreServer.component import WordGraph
 from EventExploreServer.component.word_link.TripleNetwork import TripleNetwork
 
@@ -41,7 +41,7 @@ class TESTMAIN(TestCase):
         topic = "马航MH370"
 
         ids_article = []
-        articles = search_articles(topic, 2)
+        articles = exact_search_articles(topic, 2)
         triples = []
         for idx, art in enumerate(articles):
             ids_article.append(art.id)
