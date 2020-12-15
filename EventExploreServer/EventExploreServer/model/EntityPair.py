@@ -22,11 +22,14 @@ class EntityPairUnit:
     def set_entity2(self, entity2):
         self.entity2 = entity2
 
-    def __str__(self):
+    def to_string(self):
         return "{{E1:{0:{2}>10s}, E2:{1:{2}>10s}}}".format(
             self.entity1.lemma,
             self.entity2.lemma,
             chr(12288))
+
+    def __str__(self):
+        return "{{E1:{:s}, E2:{:s}}}".format(self.entity1.lemma,self.entity2.lemma)
 
 
 

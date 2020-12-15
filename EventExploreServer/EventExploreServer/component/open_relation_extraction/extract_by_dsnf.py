@@ -1,6 +1,7 @@
 import logging
 from EventExploreServer.model.Word import WordUnit
 from EventExploreServer.model.Triple import TripleUnit
+from EventExploreServer.utils.utils import is_entity, is_named_entity
 
 debug_logger = logging.getLogger('debug')
 class ExtractByDSNF:
@@ -45,35 +46,51 @@ class ExtractByDSNF:
         # debug_logger.debug(sentence.nertags)
         #debug_logger.debug(sentence.is_extract_by_ne)
 
-    def is_entity(self, entry):
-        self.false_ = """判断词单元是否实体
-        Args:
-            entry: WordUnit，词单元
-        Returns:
-            *: bool，实体(True)，非实体(False)
-        """
-        # 候选实体词性列表
-        # 人名，机构名，地名，其他名词，缩略词
-        entity_postags = {'nh', 'ni', 'ns', 'nz', 'j'}
-        if entry.postag in entity_postags:
-            return True
-        else:
-            return False
+    # def is_entity(self, entry):
+    #     """
+    #     判断一个词是否是指定的实体类型
+    #     :param entry: WordUnit
+    #     :return:
+    #     """
+    #     # 候选实体词性列表
+    #     # 人名，机构名，地名，其他名词，缩略词
+    #     postags = {'nh', 'ni', 'ns', 'nz', 'j'}
+    #     if entry.postag in postags:
+    #         return True
+    #     else:
+    #         return False
+    #
+    # def is_named_entity(self, entry):
+    #     """
+    #     判断一个词是否是 人名，地名，机构名 三种命名实体类型
+    #     :param entry:  WordUnit
+    #     :return:
+    #     """
+    #     postags = {'nh', 'ni', 'ns'}
+    #     nertags = {'Nh', 'Ns', 'Ni'}
+    #
+    #     if (entry.postag in postags) or (entry.nertag in nertags):
+    #         return True
+    #     else:
+    #         return False
 
     def check_entity(self, entity):
-        """处理偏正结构(奥巴马总统)，得到偏正部分(总统)，句子成分的主语或宾语 (中文普遍独特现象）
+        """偏正短语：由修饰语和中心语组成，结构成分之间有修饰与被修饰关系的短语。（往往修饰词是命名实体）
+        处理偏正结构(奥巴马总统)，得到偏正部分(总统)，句子成分的主语或宾语 (中文普遍独特现象）
            奥巴马<-(ATT)-总统
            例如：奥巴马 总统 访问 中国。其中：奥巴马的偏正部分是 总统，总统在dp中和访问（verb）是SBV关系。
            "the head word is a entity and modifiers are called the modifying attributives"
            偏差修正构成NE，则进行标记。 例如：同济大学，对同济偏差修正（同济修饰大学）之后得到同济大学，同时同济大学NER标注为命名实体
            问题？？？？ --》 习近平主席：习近平修饰主席，但是习近平就是命名实体。后期修改：根据pos提取会有问题？因为会把主席这个词置为True
            #Solution： 其实不用判断是否是 机构实体 ，只需要对偏正结构标记即可，从而避免对偏正结构进行重复的关系元组提取。
+           NOTE: 如果不存在偏正结构，就返回entity本身。
+           NOTE: 最多返回entity的上一级修正中心
         Args:
             entity: WordUnit，待检验的实体
         Returns:
             head_word or entity: WordUnit，检验后的实体
         """
-        head_word = entity.head_word  # 中心词
+        head_word = entity.head_word  # 如果是偏正短语，则head_word就是中心词
         if entity.dependency == 'ATT':
             if self.like_noun(head_word) and abs(entity.ID - head_word.ID) == 1:
                 # 处理机构命名实体分词被拆分情况，防止多次抽取
@@ -86,11 +103,11 @@ class ExtractByDSNF:
                 self.sentence.has_extracted[head_word.ID-1] = True
                 return head_word
             else:
-                #return entity
-                return None
+                return entity
+                # return None
         else:
-            #return entity
-            return None
+            return entity
+            # return None
 
     def expand_entity(self):
         self.center_word_of_e1 = self.check_entity(self.entity1)
@@ -107,6 +124,23 @@ class ExtractByDSNF:
             if word.head == modify.ID and word.dependency == 'ATT':
                 return word
         return modify
+
+
+    def find_final_entity(self, entity):
+        """
+        找entity所在偏正结构的最终作为主语/宾语的实体
+        :param word:  WordUnit
+        :return: WordUnit
+        """
+        if entity.dependency == 'SBV' or entity.dependency == 'VOB':
+            return entity
+
+        word_tmp = entity
+        while word_tmp.dependency == 'ATT':
+            word_tmp = word_tmp.head_word
+        return word_tmp if word_tmp else entity
+
+
 
     def like_noun(self, entry):
         """近似名词，根据词性标注判断此名词是否职位相关
@@ -135,12 +169,12 @@ class ExtractByDSNF:
         num = 0
         i = entity1.ID + 1
         while i < entity2.ID:
-            if self.is_entity(self.sentence.words[i]):
+            if is_named_entity(self.sentence.words[i]):
                 num += 1
             i += 1
         return num
 
-    def build_triple(self, entity1, entity2, relation):
+    def build_triple(self, entity1, entity2, relation, type="Other"):
         """建立三元组，写入json文件
         Args:
             entity1: WordUnit list，实体1
@@ -180,6 +214,7 @@ class ExtractByDSNF:
         return element_str
 
     def SBV_CMP_POB(self, entity1, entity2):
+        # TODO; 考虑并列主语或者宾语的情况
         """IVC(Intransitive Verb Construction)[DSNF4]
             不及物动词结构的一种形式，例如："奥巴马毕业于哈弗大学"--->"奥巴马 毕业 于 哈弗 大学"
             经过命名实体后，合并分词结果将是"奥巴马 毕业 于 哈弗大学"
@@ -203,11 +238,12 @@ class ExtractByDSNF:
                 relations = []  # 实体间的关系
                 relations.append(ent1.head_word)  # 该实例对应为"毕业"
                 relations.append(ent2.head_word)  # 该实例对应为"于"
+                debug_logger.debug("-"*10+"Intransitive Verb DSNF4"+'-'*10)
                 return self.build_triple(entity1, entity2, relations)
                 # print(entity1.lemma + '\t' + relations[0].lemma + relations[1].lemma + '\t' + entity2.lemma)
         return False
 
-    def SBV_VOB(self, entity1, entity2, entity_coo=None, entity_flag=''):
+    def SBV_VOB(self, entity1, entity2, entity1_coo=None, entity2_coo=None, entity_flag=''):
         """TV(Transitive Verb)
             全覆盖[DSNF2|DSNF7]，部分覆盖[DSNF5|DSNF6]
             7：动词并列的情况   5和6：entity并列的左右附加情况
@@ -219,36 +255,137 @@ class ExtractByDSNF:
         Returns:
             *: bool，获得三元组(True)，未获得三元组(False)
         """
+        type2 = "DSNF2"
+        type5 = "DSNF5"
+        type6 = "DSNF6"
+        type7 = "DSNF7"
         # ent1 = self.check_entity(entity1)  # 偏正部分，若无偏正部分则就是原实体
         # ent2 = self.check_entity(entity2)
         # debug_logger.debug('SBV_VOB - 偏正修正部分：e1:{}, e2:{}'.format(ent1.lemma, ent2.lemma))
         ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
         ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
 
-        if ent1.dependency == 'SBV' and ent2.dependency == 'VOB':
-            # entity_coo不为空，存在并列
-            if entity_coo:
-                if entity_flag == 'subject':
-                    return self.determine_relation_SVB(entity_coo, entity2, ent1, ent2)
-                else:
-                    return self.determine_relation_SVB(entity1, entity_coo, ent1, ent2)
-            # 非并列
+        entity1_list = []
+        entity2_list = []
+        entity1_list.append(entity1)
+        entity2_list.append(entity2)
+        # 处理多级修饰
+        if ent1 != entity1 and abs(ent1.ID - entity1.ID) == 1:
+            entity1_list.append(ent1)
+            if ent1.dependency == 'ATT' and abs(ent1.head - entity1.ID) <= 3:
+                entity1_list.append(ent1.head_word)
+        if ent2 != entity2 and abs(ent2.ID - entity2.ID) == 1:
+            entity2_list.append(ent2)
+            if ent2.dependency == 'ATT' and abs(ent2.head - entity2.ID) <= 3:
+                entity2_list.append(ent2.head_word)
+
+
+        # 问题：是进入到determin中判断是否符合SBV_VOB结构的。。。。。。
+        satisfy = False
+        verbs = []
+        if entity_flag == '':
+            e1_final = self.find_final_entity(entity1)
+            e2_final = self.find_final_entity(entity2)
+            print('SVB_VOB Normal')
+            if e1_final.dependency == 'SBV' and e2_final.dependency == 'VOB':
+                verbs = self.determine_relation_SVB(entity1, entity2)
+        elif entity_flag == 'subject' and entity1_coo:
+            pass
+            print('SVB_VOB sub coo')
+            e1_coo_final = self.find_final_entity(entity1_coo)
+            e2_final = self.find_final_entity(entity2)
+            if e1_coo_final.dependency == 'SBV' and e2_final.dependency == 'VOB':
+                verbs = self.determine_relation_SVB(entity1_coo, entity2)
+        elif entity_flag == 'object' and entity2_coo:
+            pass
+            print('SVB_VOB obj coo')
+            e1_final = self.find_final_entity(entity1)
+            e2_coo_final = self.find_final_entity(entity2_coo)
+            if e1_final.dependency == 'SBV' and e2_coo_final.dependency == 'VOB':
+                verbs = self.determine_relation_SVB(entity1, entity2_coo)
+        elif entity_flag == 'both' and entity1_coo and entity2_coo:
+            print('SVB_VOB both coo')
+            e1_coo_final = self.find_final_entity(entity1_coo)
+            e2_coo_final = self.find_final_entity(entity2_coo)
+            if e1_coo_final.dependency == 'SBV' and e2_coo_final.dependency == 'VOB':
+                verbs = self.determine_relation_SVB(entity1_coo, entity2_coo)
+        else:
+            debug_logger.debug("ERROR: SBV_VOB entity_flag parameter value:{} is invalid!".format(entity_flag))
+            # error_logger
+
+        # e1_final = self.find_final_entity(entity1)
+        # e2_final = self.find_final_entity(entity2)
+        # if e1_final == 'SBV' and e2_final == 'VOB':
+        #     verbs = self.determine_relation_SVB()
+        #
+        #
+        # verbs = []
+        # if ent1.dependency == 'SBV' and ent2.dependency == 'VOB':
+        #     if entity_flag == 'subject':
+        #         pass
+        #         verbs = self.determine_relation_SVB(entity1_coo, entity2)
+        #     elif entity_flag == 'object':
+        #         pass
+        #         verbs = self.determine_relation_SVB(entity1, entity2_coo)
+        #     else:
+        #         verbs = self.determine_relation_SVB(entity1, entity2)
+        #     # entity_coo不为空，存在并列
+        #     # if entity_coo:
+        #     #     if entity_flag == 'subject':
+        #     #         return self.determine_relation_SVB(entity_coo, entity2, ent1, ent2)
+        #     #     else:
+        #     #         return self.determine_relation_SVB(entity1, entity_coo, ent1, ent2)
+        #     # 非并列
+        #     # else:
+        #     #     return self.determine_relation_SVB(entity1, entity2, ent1, ent2, type2)
+        #     # verbs = self.determine_relation_SVB(entity1, entity2)
+        # # 习近平 主席 访问 奥巴马 总统 先生 -->先生 是 访问 的宾语，因此处理两层修饰
+        # elif (ent1.dependency == 'SBV'
+        #       and ent2.dependency == 'ATT' and ent2.head_word.dependency == 'VOB'
+        #       and ent2.head_word.head == ent1.head):
+        #     # entity_coo不为空，存在并列
+        #     # if entity_coo:
+        #     #     if entity_flag == 'subject':
+        #     #         return self.determine_relation_SVB(entity_coo, entity2, ent1, ent2)
+        #     #     else:
+        #     #         return self.determine_relation_SVB(entity1, entity_coo, ent1, ent2)
+        #     # else:
+        #     #     return self.determine_relation_SVB(entity1, entity2, ent1, ent2)
+        #     verbs = self.determine_relation_SVB(entity1, entity2)
+        # # 奥巴马 总统 先生 访问 习近平 主席
+        # elif (ent2.dependency == 'VOB'
+        #       and ent1.dependency == 'ATT' and ent1.head_word.dependency == 'SBV'
+        #       and ent1.head_word.head == ent2.head):
+        #     # if entity_coo:
+        #     #     pass
+        #     # else:
+        #     #     print("find the the the")
+        #     #     return self.determine_relation_SVB(entity1, entity2, ent1, ent2)
+        #     verbs = self.determine_relation_SVB(entity1, entity2)
+        # # 奥巴马 总统 先生 访问 习近平 主席 同志
+        # elif (ent1.dependency == 'ATT' and ent2.dependency == 'ATT'
+        #       and ent1.head_word.dependency == 'SBV' and ent2.head_word.dependency == 'VOB'
+        #       and ent1.head_word.head == ent2.head_word.head):
+        #     # if entity_coo:
+        #     #     pass
+        #     # else:
+        #     #     print('find two two two ')
+        #     #     return self.determine_relation_SVB(entity1, entity2, ent1, ent2)
+        #     verbs = self.determine_relation_SVB(entity1, entity2)
+        for i, v in enumerate(verbs):
+            relation_list = []
+            relation_list.append(v)
+            if i == 0:
+                debug_logger.debug("-"*10+"SVB DSNF2"+'-'*10)
             else:
-                return self.determine_relation_SVB(entity1, entity2, ent1, ent2)
-        # 习近平 主席 访问 奥巴马 总统 先生 -->先生 是 访问 的宾语，因此处理两层修饰
-        elif (ent2.dependency == 'ATT' and ent2.head_word.dependency == 'VOB'
-              and ent2.head_word.head == ent1.head):
-            # entity_coo不为空，存在并列
-            if entity_coo:
-                if entity_flag == 'subject':
-                    return self.determine_relation_SVB(entity_coo, entity2, ent1, ent2)
-                else:
-                    return self.determine_relation_SVB(entity1, entity_coo, ent1, ent2)
-            else:
-                return self.determine_relation_SVB(entity1, entity2, ent1, ent2)
+                debug_logger.debug("-"*10+"SVB verb coo DSNF7"+'-'*10)
+            self.build_triple(entity1_list, entity2_list, relation_list)
+        return False
         return False
 
-    def determine_relation_SVB(self, entity1, entity2, ent1, ent2):
+
+    # def determine_relation_SVB(self, entity1, entity2, ent1, ent2, entity_coo=None, type='Other'):
+    def determine_relation_SVB(self, entity1, entity2, type='Other'):
         """确定主语和宾语之间的关系
         Args:
             entity1: WordUnit，原实体1
@@ -259,36 +396,115 @@ class ExtractByDSNF:
             *: bool，获得三元组(True)，未获得三元组(False)
         """
         relation_list = []  # 关系列表
+        debug_logger.debug("! determine_relation_SVB function: e1:{}, e2:{}".format(entity1,entity2))
         # relation_list.append(ent2.head_word)
-        relation_list.append(ent1.head_word)
-        # ？？？为什么可以直接确定relationship word，而不是遍历去寻找，在这里肯定有错误啊。----------------------------------------++++--------------------------------
+        # relation_list.append(ent1.head_word)
+        # ？？？为什么可以直接确定rela      tionship word，而不是遍历去寻找，在这里肯定有错误啊。
+        # ----------------------------------------++++--------------------------------
         # 例如：习近平 主席 访问 奥巴马 总统 先生。 抽取得到的relation word是先生，而不是访问
-        entity1_list = []  # 实体1列表
-        entity1_list.append(entity1)
-        entity2_list = []  # 实体2列表
-        entity2_list.append(entity2)
 
-        # 实体补全(解决并列结构而增加)
-        # ent_1 = self.check_entity(entity1)
-        # ent_2 = self.check_entity(entity2)
-        # debug_logger.debug('determine_relation_SVB - 偏正修正部分：e1:{}, e2:{}'.format(ent1.lemma, ent2.lemma))
-        ent_1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
-        ent_2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
-        # 华盛顿 警方
-        # if ent_1 != entity1 and abs(ent_1.ID-entity1.ID) == 1 and (not self.is_entity(entity1.head_word)):
-        #     entity1_list.append(entity1.head_word)
-        # if ent_2 != entity2 and abs(ent_2.ID-entity2.ID) == 1 and (not self.is_entity(entity2.head_word)):
-        #     entity2_list.append(entity2.head_word)
-        if ent_1 != entity1 and abs(ent_1.ID - entity1.ID) == 1:
-            entity1_list.append(ent_1)
-            # 豫Ｆ××××× 号 重型 半挂⻋
-            # 鄂Ｂ××××× 小轿车
-            if ent_1.dependency == 'ATT' and abs(ent_1.head - entity1.ID) <= 3:
-                entity1_list.append(ent_1.head)
-        if ent_2 != entity2 and abs(ent_2.ID - entity2.ID) == 1:
-            entity2_list.append(ent_2)
-            if ent_1.dependency == 'ATT' and abs(ent_1.head - entity1.ID) <= 3:
-                entity2_list.append(ent_1.head)
+        # # 根据SBV_VOB函数已经确定一定有SBV关系，因此深度遍历寻找relation
+        # found_rel = False
+        # tmp = entity1
+        # while not found_rel:
+        #     if tmp.dependency == 'SBV':
+        #         relation_list.append(tmp.head_word)
+        #         found_rel = True
+        #     tmp = tmp.head_word
+        # debug_logger.debug("Relation list: {}".format(" ".join([str(rel) for rel in relation_list])))
+
+        # TODO; 需要根据 SVB_VOB函数的不同情况分别进行处理, 或者修改SVB_VOB传递过来的参数
+        # 应该无论什么情况，先找到对应的dp中的符合的 主语 和 宾语 词
+
+        # entity1_list = []  # 实体1列表
+        # entity1_list.append(entity1)
+        # entity2_list = []  # 实体2列表
+        # entity2_list.append(entity2)
+        #
+        # # 实体补全(解决并列结构而增加)
+        # # ent_1 = self.check_entity(entity1)
+        # # ent_2 = self.check_entity(entity2)
+        # # debug_logger.debug('determine_relation_SVB - 偏正修正部分：e1:{}, e2:{}'.format(ent1.lemma, ent2.lemma))
+        # ent_1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
+        # ent_2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
+        # # 华盛顿 警方
+        # # if ent_1 != entity1 and abs(ent_1.ID-entity1.ID) == 1 and (not self.is_entity(entity1.head_word)):
+        # #     entity1_list.append(entity1.head_word)
+        # # if ent_2 != entity2 and abs(ent_2.ID-entity2.ID) == 1 and (not self.is_entity(entity2.head_word)):
+        # #     entity2_list.append(entity2.head_word)
+        # if ent_1 != entity1 and abs(ent_1.ID - entity1.ID) == 1:
+        #     entity1_list.append(ent_1)
+        #     # 豫Ｆ××××× 号 重型 半挂⻋
+        #     # 鄂Ｂ××××× 小轿车
+        #     if ent_1.dependency == 'ATT' and abs(ent_1.head - entity1.ID) <= 3:
+        #         entity1_list.append(ent_1.head_word)
+        # if ent_2 != entity2 and abs(ent_2.ID - entity2.ID) == 1:
+        #     entity2_list.append(ent_2)
+        #     if ent_2.dependency == 'ATT' and abs(ent_2.head - entity2.ID) <= 3:
+        #         entity2_list.append(ent_2.head_word)
+        # print("process ent done")
+        ent1 = self.check_entity(entity1)
+        ent2 = self.check_entity(entity2)
+
+        verbs = []  # 可能存在并列动词
+        found_flag = False
+        word_tmp = ent1
+        while not found_flag:
+            if word_tmp.dependency == 'SBV':
+                verbs.append(word_tmp.head_word)
+                found_flag = True
+            word_tmp = word_tmp.head_word
+        if len(verbs) > 0: # 有第一个verb之后才会有并列的verb
+            id_tmp = verbs[0].ID
+            while id_tmp < ent2.ID:
+                word_tmp = self.sentence.get_word_by_id(id_tmp)
+                if word_tmp.dependency == 'COO' and word_tmp.head_word == verbs[0]:
+                    # 判断并列动词是否符合: 防止并列动词和第一个动词主语不同
+                    satisfy = True
+                    i = ent1.ID # TODO； 应该可以替换为 i=verbs[0].ID 因为后一个动词即使有不同主语也是在第一个动词之后
+                    while i < ent2.ID:  # 这里减1，因为ID从1开始编号
+                        temp = self.sentence.words[i]  # ent1的后一个词
+                        # if temp(entity) <-[SBV]- AttWord -[VOB]-> 'ent2'
+                        if is_named_entity(temp) and temp.head == ent2.head and temp.dependency == 'SBV':
+                            # 代词不作为实体对待
+                            if temp.postag == 'r':
+                                continue
+                            else:
+                                satisfy = False
+                                break
+                        i += 1
+                    if satisfy:
+                        verbs.append(word_tmp)
+                    break
+                id_tmp += 1
+
+        debug_logger.debug("Found verbs: {}".format(" ".join([str(word) for word in verbs])))
+        # for e1 in entity1_list:
+        #     print('1'+str(e1))
+        # for e2 in entity2_list:
+        #     print('2'+str(e2))
+        # for rel in relation_list:
+        #     print('rel'+str(rel))
+
+        return verbs
+        for i, v in enumerate(verbs):
+            relation_list = []
+            relation_list.append(v)
+            if i == 0:
+                debug_logger.debug("-"*10+"SVB DSNF2"+'-'*10)
+            else:
+                debug_logger.debug("-"*10+"SVB verb coo DSNF7"+'-'*10)
+            self.build_triple(entity1_list, entity2_list, relation_list)
+        return False
+
+
+
+
+
+
+
+
+
 
         # 寻找relationship词
         coo_flag = True  # 主谓关系中，可以处理的标志位
@@ -301,7 +517,8 @@ class ExtractByDSNF:
             temp = self.sentence.words[i]  # ent1的后一个词
             # if temp(entity) <-[SBV]- AttWord -[VOB]-> 'ent2'
             # 确保第二个动宾结构不能构成SBV-VOB的形式
-            if self.is_entity(temp) and temp.head == ent2.head and temp.dependency == 'SBV':
+            # TODO; 如何判断这个实体的类型？
+            if is_named_entity(temp) and temp.head == ent2.head and temp.dependency == 'SBV':
                 # 代词不作为实体对待
                 if temp.postag == 'r':
                     continue
@@ -309,7 +526,50 @@ class ExtractByDSNF:
                     coo_flag = False
                     break
             i += 1
-        # 如果该句子满足处理要求
+
+
+        # 如果coo_flag为False说明这两个实体不是和同一个verb有关系。
+        if not coo_flag:
+            print("exit coo_flag")
+            return False
+        else:
+            print('enter coo_flag')
+            relation_list = []
+            found_rel = False
+            tmp = entity1
+            while not found_rel:
+                if tmp.dependency == 'SBV':
+                    relation_list.append(tmp.head_word)
+                    found_rel = True
+                tmp = tmp.head_word
+            debug_logger.debug("Relation list: {}".format(" ".join([str(rel) for rel in relation_list])))
+
+            if ent1.head == ent2.head:
+                debug_logger.debug("-"*10+"SVB DSNF2"+'-'*10)
+                self.build_triple(entity1_list, entity2_list, relation_list)
+            if ent2.head_word.dependency == 'COO' and ent2.head_word.head == ent1.head:
+                # 需要把两个动词都提取出来，因此可以抽取连个triple
+                debug_logger.debug("-"*10+"SVB DSNF2"+'-'*10)
+                self.build_triple(entity1_list, entity2_list, relation_list)
+                relation_list = []
+                found_rel = False
+                tmp = entity2
+                while not found_rel:
+                    if tmp.dependency == 'VOB':
+                        relation_list.append(tmp.head_word)
+                        found_rel = True
+                    tmp = tmp.head_word
+                debug_logger.debug("Relation list: {}".format(" ".join([str(rel) for rel in relation_list])))
+                debug_logger.debug("-"*10+"SVB COO DSNF7"+'-'*10)
+                self.build_triple(entity1_list, entity2_list, relation_list)
+
+            # if ent2.head_word.dependency == 'COO' and ent2.head_word.head_word.head == ent1.head:
+            #     pass
+                # self.build_triple()
+        # TODO;
+
+        return True
+
         is_ok = False  # 是否获得DSNF匹配
         if coo_flag:
             # [DSNF2]
@@ -321,8 +581,9 @@ class ExtractByDSNF:
             # 如果实体2所依存的词，与实体1所依存词构成COO，那么特征关系词选择实体2所依存的词
             # 习近平 视察 并 访问 厦门
             # 实体，关系前面已添加，这里谓词只取ent2的中心词("访问")
-            elif (ent2.head_word.dependency == 'COO' and (ent2.head_word.head == ent1.head  # 两个并列谓词
-                                                          or ent2.head_word.head_word.head == ent1.head)):  # 三个并列谓词
+            elif (ent2.head_word.dependency == 'COO'
+                  and (ent2.head_word.head == ent1.head  # 两个并列谓词
+                       or ent2.head_word.head_word.head == ent1.head)):  # 三个并列谓词
                 is_ok = True
 
         # 针对特殊情况进行后处理
@@ -334,46 +595,46 @@ class ExtractByDSNF:
             return self.build_triple(entity1_list, entity2_list, relation_list)
         return False
 
-    def coordinate(self, entity1, entity2):
-        """[DSNF3|DSNF5|DSNF6]
-            并列实体
-            当实体存在COO时，如果实体1与实体2并列，实体2与实体3构成三元组，则实体1和实体2也会构成三元组
-        Args:
-            entity1: WordUnit，原实体1
-            entity2: WordUnit，原实体2
-        Returns:
-            *: bool，获得三元组(True)，未获得三元组(False)
-        """
-        # ent1 = self.check_entity(entity1)
-        # ent2 = self.check_entity(entity2)
-        # debug_logger.debug('coordinate - 偏正修正部分：e1:{}, e2:{}'.format(ent1.lemma, ent2.lemma))
-        ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
-        ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
-        # 习近平 主席 和 李克强 总理 访问 美国
-        # 依据"李克强"(entiy1)和"美国"(entity2)，抽取三元组(李克强, 访问, 美国)
-        # 如果存在并列依存，只会有entity1(ent1) <-[ATT]- entity2(ent2)
-        # entity1与entity2不构成主宾entity1(ent1) <-[ABV]- temp -[VOB]->entity3
-        if ent1.dependency == 'COO' and (not self.SBV_VOB(entity1, entity2)):
-            # 并列主语[DSNF5]
-            # 定位需要entity1与entity3
-            if ent1.head_word.dependency == 'SBV':
-                # ent2所并列实体
-                entity_subject = self.search_entity(ent1.head_word)
-                if not self.SBV_VOB(entity_subject, entity2, entity_coo=entity1, entity_flag='subject'):
-                    is_ok = self.SBVorFOB_POB_VOB(entity_subject, entity2, entity_coo=entity1, entity_flag='subject')
-        # 习近平 访问 美国 和 英国
-        # 依据"习近平"(entity1)和"英国"(entity2)，抽取三元组(习近平, 访问, 英国)
-        elif ent2.dependency == 'COO' and (not self.SBV_VOB(entity1, entity2)):
-            # 并列宾语[DSNF6]
-            debug_logger.debug('---------并列宾语-------1')
-            if ent2.head_word.dependency == 'VOB' or ent2.head_word.dependency == 'POB':
-                # ent2所并列实体
-                entity_object = self.search_entity(ent2.head_word)
-                debug_logger.debug('---------并列宾语-------2'+str(entity1)+str(entity_object)+str(entity2))
-                if not self.SBV_VOB(entity1, entity_object, entity_coo=entity2, entity_flag='object'):
-                    debug_logger.debug('---------并列宾语-------3')
-                    is_ok = self.SBVorFOB_POB_VOB(entity1, entity_object, entity_coo=entity2, entity_flag='object')
-        return False
+    # def coordinate(self, entity1, entity2):
+    #     """[DSNF3|DSNF5|DSNF6]
+    #         并列实体
+    #         当实体存在COO时，如果实体1与实体2并列，实体2与实体3构成三元组，则实体1和实体2也会构成三元组
+    #     Args:
+    #         entity1: WordUnit，原实体1
+    #         entity2: WordUnit，原实体2
+    #     Returns:
+    #         *: bool，获得三元组(True)，未获得三元组(False)
+    #     """
+    #     # ent1 = self.check_entity(entity1)
+    #     # ent2 = self.check_entity(entity2)
+    #     # debug_logger.debug('coordinate - 偏正修正部分：e1:{}, e2:{}'.format(ent1.lemma, ent2.lemma))
+    #     ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
+    #     ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
+    #     # 习近平 主席 和 李克强 总理 访问 美国
+    #     # 依据"李克强"(entiy1)和"美国"(entity2)，抽取三元组(李克强, 访问, 美国)
+    #     # 如果存在并列依存，只会有entity1(ent1) <-[ATT]- entity2(ent2)
+    #     # entity1与entity2不构成主宾entity1(ent1) <-[ABV]- temp -[VOB]->entity3
+    #     if ent1.dependency == 'COO' and (not self.SBV_VOB(entity1, entity2)):
+    #         # 并列主语[DSNF5]
+    #         # 定位需要entity1与entity3
+    #         if ent1.head_word.dependency == 'SBV':
+    #             # ent2所并列实体
+    #             entity_subject = self.search_entity(ent1.head_word)
+    #             if not self.SBV_VOB(entity_subject, entity2, entity_coo=entity1, entity_flag='subject'):
+    #                 is_ok = self.SBVorFOB_POB_VOB(entity_subject, entity2, entity_coo=entity1, entity_flag='subject')
+    #     # 习近平 访问 美国 和 英国
+    #     # 依据"习近平"(entity1)和"英国"(entity2)，抽取三元组(习近平, 访问, 英国)
+    #     elif ent2.dependency == 'COO' and (not self.SBV_VOB(entity1, entity2)):
+    #         # 并列宾语[DSNF6]
+    #         debug_logger.debug('---------并列宾语-------1')
+    #         if ent2.head_word.dependency == 'VOB' or ent2.head_word.dependency == 'POB':
+    #             # ent2所并列实体
+    #             entity_object = self.search_entity(ent2.head_word)
+    #             debug_logger.debug('---------并列宾语-------2'+str(entity1)+str(entity_object)+str(entity2))
+    #             if not self.SBV_VOB(entity1, entity_object, entity_coo=entity2, entity_flag='object'):
+    #                 debug_logger.debug('---------并列宾语-------3')
+    #                 is_ok = self.SBVorFOB_POB_VOB(entity1, entity_object, entity_coo=entity2, entity_flag='object')
+    #     return False
 
     def SBVorFOB_POB_VOB(self, entity1, entity2, entity_coo=None, entity_flag=''):
         """[DSNF3]
@@ -394,9 +655,9 @@ class ExtractByDSNF:
         if ent1.dependency == 'SBV' or ent1.dependency == 'FOB':
             if ent2.dependency == 'POB' and ent2.head_word.dependency == 'ADV':
                 if entity_coo:
-                    if entity_flag == 'subject':
+                    if entity_flag == 'subject': # 主语并列
                         return self.determine_relation_SVP(entity_coo, entity2, ent1, ent2)
-                    else:
+                    else: # 宾语并列
                         return self.determine_relation_SVP(entity1, entity_coo, ent1, ent2)
                 else:
                     return self.determine_relation_SVP(entity1, entity2, ent1, ent2)
@@ -438,6 +699,147 @@ class ExtractByDSNF:
             if ent_1.dependency == 'ATT' and abs(ent_1.head - entity1.ID) <= 3:
                 entity2_list.append(ent_1.head)
 
+        verbs = [] # 可能存在并列动词: 如果并列的话确保是符合DSNF3结构的并列动词
+        # NOTE: 根据ent2来寻找verb更合理
+        found_flag = False
+        word_tmp = ent2
+        while word_tmp and (not found_flag):
+            print('-------', str(word_tmp))
+            # if word_tmp.head == ent1.head:
+            if word_tmp.dependency == 'ADV':
+                verbs.append(word_tmp.head_word)
+                found_flag = True
+            word_tmp = word_tmp.head_word
+        debug_logger.debug("Found verbs: {}".format(" ".join([str(word) for word in verbs])))
+        if len(verbs) > 0: # 有第一个verb之后才会有并列的verb
+            id_tmp = verbs[0].ID
+            while id_tmp < ent2.ID:
+                word_tmp = self.sentence.get_word_by_id(id_tmp)
+                if word_tmp.dependency == 'COO' and word_tmp.head_word == verbs[0]:
+                    # 判断并列动词是否符合: 防止并列动词和第一个动词主语不同
+                    satisfy = True
+                    i = ent1.ID # TODO； 应该可以替换为 i=verbs[0].ID 因为后一个动词即使有不同主语也是在第一个动词之后
+                    while i < ent2.ID:  # 这里减1，因为ID从1开始编号
+                        temp = self.sentence.words[i]  # ent1的后一个词
+                        # if temp(entity) <-[SBV]- AttWord -[VOB]-> 'ent2'
+                        if is_named_entity(temp) and temp.head == ent2.head and temp.dependency == 'SBV':
+                            # 代词不作为实体对待
+                            if temp.postag == 'r':
+                                continue
+                            else:
+                                satisfy = False
+                                break
+                        i += 1
+                    if satisfy:
+                        verbs.append(word_tmp)
+                    break
+                id_tmp += 1
+
+        debug_logger.debug("Found verbs: {}".format(" ".join([str(word) for word in verbs])))
+
+        # return False
+        #
+        #
+        #
+        #
+        #
+        #
+        # word_tmp = ent1
+        # while word_tmp and (not found_flag):
+        #     if (word_tmp.dependency == 'SBV' or word_tmp.dependency == 'FOB') and ent2.head_word.head == word_tmp.head:
+        #         verbs.append(word_tmp.head_word)
+        #         found_flag = True
+        #     # 中国国家主席习近平访问韩国，并在首尔大学发表演讲
+        #     # if (word_tmp.dependency == 'COO') and ent2.head_word.head_word == word_tmp:
+        #     #     verbs.append(word_tmp)
+        #     #     found_flag = True
+        #     word_tmp = word_tmp.head_word
+        # id_tmp = verbs[0].ID
+        # while id_tmp < len(self.sentence.words)+1:
+        #    word_tmp = self.sentence.get_word_by_id(id_tmp)
+        #    if word_tmp.dependency == 'COO' and word_tmp.head_word == verbs[0]:
+        #        # 判断并列动词是否符合: 防止并列动词和第一个动词主语不同
+        #        satisfy = True
+        #        i = ent1.ID
+        #        while i < ent2.ID - 1:  # 这里减1，因为ID从1开始编号
+        #            temp = self.sentence.words[i]  # ent1的后一个词
+        #            # if temp(entity) <-[SBV]- AttWord -[VOB]-> 'ent2'
+        #            if is_named_entity(temp) and temp.head == ent2.head and temp.dependency == 'SBV':
+        #                # 代词不作为实体对待
+        #                if temp.postag == 'r':
+        #                    continue
+        #                else:
+        #                    satisfy = False
+        #                    break
+        #            i += 1
+        #        if satisfy:
+        #            verbs.append(word_tmp)
+        #        break
+        #    id_tmp += 1
+        #
+        # debug_logger.debug("Found verbs: {}".format(" ".join([str(word) for word in verbs])))
+
+        prep = ent2.head_word.lemma # 处理特殊介词
+        verb_suppl = None
+        id_tmp = verbs[0].ID
+        while id_tmp < len(self.sentence.words) + 1:
+            word_tmp = self.sentence.get_word_by_id(id_tmp)
+            if word_tmp.dependency == 'VOB':
+                verb_suppl = word_tmp
+                break
+            id_tmp += 1
+
+        for i, v in enumerate(verbs):
+            relation_list = []
+            relation_list.append(v)
+            if verb_suppl:
+                relation_list.append(verb_suppl)
+
+            # 考虑特殊介词
+            if prep == '被' or prep == '由':
+                # TODO; 多个triples,不能使用return
+                # return self.build_triple(entity2_list, entity1_list, relation_list)
+                if i == 0:
+                    debug_logger.debug("-"*10+"SVP DSNF3"+'-'*10)
+                else:
+                    debug_logger.debug("-"*10+"SVP coo DSNF3"+'-'*10)
+                self.build_triple(entity2_list, entity1_list, relation_list)
+            else:
+                # return self.build_triple(entity1_list, entity2_list, relation_list)
+                if i == 0:
+                    debug_logger.debug("-"*10+"SVP DSNF3"+'-'*10)
+                else:
+                    debug_logger.debug("-" * 10 + "SVP coo DSNF3" + '-' * 10)
+                self.build_triple(entity1_list, entity2_list, relation_list)
+        return False
+
+
+        # exist_coo_verb = False
+        # prep = ent2.head_word.lemma # 处理特殊介词
+        # relation_list = []
+        # if ent2.head_word.head == ent1.head:
+        #     found_flag = False
+        #     tmp = ent1
+        #     while not found_flag:
+        #         if tmp.dependency == 'SBV':
+        #             relation_list.append(tmp)
+        #             found_flag = True
+        #         tmp = tmp.head_word
+        #     while tmp.ID < len(self.sentence.words)+1:
+        #         if tmp.dependency == 'VOB':
+        #             relation_list.append(tmp)
+        #             break
+        #         tmp = self.sentence.get_word_by_id[tmp.ID+1]
+        #         pass
+        #
+        # # 判断是否存在并列动词
+        # # 习近平 在 上海 视察 和 监管。
+        # if ent2.head_word.head_word
+        #
+        #
+        # return False
+
+        # 寻找动词并判断动词是否符合：动词，并列动词（符合），并列动词（不符合）
         coo_flag = False  # 并列动词是否符合要求标志位
         relation_word = None  # 关系词
         is_ok = False  # DSNF覆盖与否
@@ -455,7 +857,7 @@ class ExtractByDSNF:
             while i < ent2.ID - 1:  # 这里减1，因为ID从1开始编号
                 temp = self.sentence.words[i]  # ent1的后一个词
                 # if temp(entity) <-[SBV]- AttWord -[VOB]-> 'ent2'
-                if self.is_entity(temp) and temp.head == ent2.head and temp.dependency == 'SBV':
+                if is_named_entity(temp) and temp.head == ent2.head and temp.dependency == 'SBV':
                     # 代词不作为实体对待
                     if temp.postag == 'r':
                         continue
@@ -486,15 +888,88 @@ class ExtractByDSNF:
                 return self.build_triple(entity1_list, entity2_list, relation_list)
         return False
 
-    def E_NN_E(self, entity1, entity2):
-        """[DSNF1]
-            如果两个实体紧紧靠在一起，第一个实体是第二个实体的ATT，两个实体之间的词性为NNT(职位名称)
+    def coordinate(self, entity1, entity2):
+        """[DSNF3|DSNF5|DSNF6]
+            并列实体
+            当实体存在COO时，如果实体1与实体2并列，实体2与实体3构成三元组，则实体1和实体2也会构成三元组
         Args:
             entity1: WordUnit，原实体1
             entity2: WordUnit，原实体2
         Returns:
             *: bool，获得三元组(True)，未获得三元组(False)
         """
+        # ent1 = self.check_entity(entity1)
+        # ent2 = self.check_entity(entity2)
+        # debug_logger.debug('coordinate - 偏正修正部分：e1:{}, e2:{}'.format(ent1.lemma, ent2.lemma))
+        ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
+        ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
+
+
+        if ent1.dependency == 'COO' and ent2.dependency == 'COO':
+            e1_coo = ent1.head_word
+            e2_coo = ent2.head_word
+            if e1_coo.dependency == 'SBV' and e2_coo == 'VOB':
+                pass
+                self.SBV_VOB(entity1, entity2, entity1_coo=e1_coo, entity2_coo=e2_coo, entity_flag='both')
+                # self.SBVorFOB_POB_VOB(self, entity1, entity2, entity_coo=None, entity_flag='')
+        elif ent1.dependency == 'COO':
+            e1_coo = ent1.head_word
+            if e1_coo.dependency == 'SBV':
+                print('Sub COO'+str(e1_coo))
+                self.SBV_VOB(entity1, entity2, entity1_coo=e1_coo, entity_flag='subject')
+                # self.SBVorFOB_POB_VOB(entity1, entity2, entity_coo=e1_coo, entity_flag='subject')
+        elif ent2.dependency == 'COO':
+            e2_coo = ent2.head_word
+            if e2_coo.dependency == 'VOB':
+                print('Obj COO'+str(e2_coo))
+                self.SBV_VOB(entity1, entity2, entity2_coo=e2_coo, entity_flag='object')
+                # self.SBVorFOB_POB_VOB(entity1, entity2, entity_coo=e2_coo, entity_flag='object')
+
+        return False
+
+
+
+
+
+        # 习近平 主席 和 李克强 总理 访问 美国
+        # 依据"李克强"(entiy1)和"美国"(entity2)，抽取三元组(李克强, 访问, 美国)
+        # 如果存在并列依存，只会有entity1(ent1) <-[ATT]- entity2(ent2)
+        # entity1与entity2不构成主宾entity1(ent1) <-[ABV]- temp -[VOB]->entity3
+        if ent1.dependency == 'COO' and (not self.SBV_VOB(entity1, entity2)):
+            # 并列主语[DSNF5]
+            # 定位需要entity1与entity3
+            if ent1.head_word.dependency == 'SBV':
+                # ent2所并列实体
+                entity_subject = self.search_entity(ent1.head_word)
+                if not self.SBV_VOB(entity_subject, entity2, entity_coo=entity1, entity_flag='subject'):
+                    is_ok = self.SBVorFOB_POB_VOB(entity_subject, entity2, entity_coo=entity1, entity_flag='subject')
+        # 习近平 访问 美国 和 英国
+        # 依据"习近平"(entity1)和"英国"(entity2)，抽取三元组(习近平, 访问, 英国)
+        elif ent2.dependency == 'COO' and (not self.SBV_VOB(entity1, entity2)):
+            # 并列宾语[DSNF6]
+            debug_logger.debug('---------并列宾语-------1')
+            if ent2.head_word.dependency == 'VOB' or ent2.head_word.dependency == 'POB':
+                # ent2所并列实体
+                entity_object = self.search_entity(ent2.head_word)
+                debug_logger.debug('---------并列宾语-------2'+str(entity1)+str(entity_object)+str(entity2))
+                if not self.SBV_VOB(entity1, entity_object, entity_coo=entity2, entity_flag='object'):
+                    debug_logger.debug('---------并列宾语-------3')
+                    is_ok = self.SBVorFOB_POB_VOB(entity1, entity_object, entity_coo=entity2, entity_flag='object')
+        return False
+
+
+    def E_NN_E(self, entity1, entity2):
+        """[DSNF1]
+            如果两个实体紧紧靠在一起，第一个实体是第二个实体的ATT，两个实体之间的词性为NNT(职位名称)
+            实现范式一：
+
+        Args:
+            entity1: WordUnit，原实体1
+            entity2: WordUnit，原实体2
+        Returns:
+            *: bool，获得三元组(True)，未获得三元组(False)
+        """
+        type="DSNF1"
         # entity1 <--[ATT]-- temp <--[ATT]-- entity2
         # 美国 总统 奥巴马
         if entity1.dependency == 'ATT' and entity1.head_word.dependency == 'ATT' and entity1.head_word.head == entity2.ID:
@@ -505,23 +980,27 @@ class ExtractByDSNF:
             # "前任" <---> other noun-modifier
             if temp.head == entity1.head and temp.dependency == 'ATT':
                 if 'n' in entity1.head_word.postag:
-                    relation_list = []  # 关系列表
+                    relation_list = []  # 关系列表，把多的修饰词都做为关系词，如上： rel-> "前任总统"
                     relation_list.append(temp)
                     relation_list.append(entity1.head_word)
-                    return self.build_triple(entity1, entity2, relation_list)
+                    debug_logger.debug("-" * 10 + "E_NN_E multi rels" + '-' * 10)
+                    return self.build_triple(entity1, entity2, relation_list, type=type)
             else:
                 # 美国 总统 奥巴马
                 if 'n' in entity1.head_word.postag:
                     head_word = entity1.head_word
-                    return self.build_triple(entity1, entity2, entity1.head_word)
+                    debug_logger.debug("-" * 10 + "E_NN_E rel" + '-' * 10)
+                    return self.build_triple(entity1, entity2, entity1.head_word, type=type)
         # 美国 的 奥巴马 总统
         # "美国" <-[ATT]- "总统"    "奥巴马" <-[ATT]- "总统"
         # ID("奥巴马")-ID("美国")==2
         elif (entity1.dependency == 'ATT' and entity2.dependency == 'ATT'
               and entity1.head == entity2.head and abs(entity2.ID - entity1.ID) == 2):
             if 'n' in entity1.head_word.postag:
-                return self.build_triple(entity1, entity2, entity1.head_word)
+                debug_logger.debug("-"*10+"E_NN_E rel behind"+'-'*10)
+                return self.build_triple(entity1, entity2, entity1.head_word, type=type)
         # 美国 总统 先生 奥巴马
+        # 中国 的 主席 习近平
         # "美国" <-[ATT]- "总统"    "总统" <-[ATT]- "先生"    "先生" <-[ATT]- "奥巴马"
         # entity1.head_word.head_word.head == entity2.ID
         elif (entity1.dependency == 'ATT' and entity1.head_word.dependency == 'ATT'
@@ -529,9 +1008,13 @@ class ExtractByDSNF:
             if 'n' in entity1.head_word.head_word.postag:
                 relation_list = []
                 relation_list.append(entity1.head_word)
-                relation_list.append(entity2.head_word)
+                if entity2.head_word:
+                    # 第二个例子中：习近平的head_word是None，避免出现None
+                    relation_list.append(entity2.head_word)
+                debug_logger.debug("-"*10+"E_NN_E entity mul"+'-'*10)
                 return self.build_triple(entity1, entity2, relation_list)
         return False
+
 
     def entity_de_entity_NNT(self, entity1, entity2):
         """形如"厦门大学的朱崇实校长"，实体+"的"+实体+名词

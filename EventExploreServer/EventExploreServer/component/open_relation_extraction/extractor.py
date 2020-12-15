@@ -1,5 +1,5 @@
 import logging
-from EventExploreServer.utils.utils import is_entity
+from EventExploreServer.utils.utils import is_entity, is_named_entity
 from EventExploreServer.model.EntityPair import EntityPairUnit
 from EventExploreServer.component.open_relation_extraction.extract_by_dsnf import ExtractByDSNF
 
@@ -27,6 +27,8 @@ class Extractor:
         Returns:
             num： 知识三元组的数量编号
         """
+        debug_logger.debug("Sentence: {:s}".format(origin_sentence))
+        debug_logger.debug("DP result:\n {:s}".format(sentence.to_string()))
         self.triples = []
         self.get_entities(sentence)
         self.get_entity_pairs(sentence)
@@ -34,8 +36,8 @@ class Extractor:
         debug_logger.debug('Entity pairs: {}'.format(list(map(str, self.entity_pairs))))
 
         for i, entity_pair in enumerate(self.entity_pairs):
-            debug_logger.debug("分析实体对儿{:>3d}： {:s}".format(i, str(entity_pair)))
-            debug_logger.debug(sentence.has_extracted)
+            debug_logger.debug("{:d}-{:d}: {:s}".format(idx_document, i, str(entity_pair)))
+            # debug_logger.debug(sentence.has_extracted)
             entity1 = entity_pair.entity1
             entity2 = entity_pair.entity2
             id1 = entity1.ID-1
@@ -49,20 +51,26 @@ class Extractor:
             extract_dsnf = ExtractByDSNF(origin_sentence, sentence, entity1, entity2, idx_sentence, idx_document, self.num)
             # ? 一个entity pair可能提取出多个triples吗？
             # [DSNF2|DSNF7]，部分覆盖[DSNF5|DSNF6]
+            debug_logger.debug("SBV_VOB")
             if extract_dsnf.SBV_VOB(entity1, entity2):
                 pass
             # [DSNF4]
+            debug_logger.debug("SBV_CMP_POB, DSNF4")
             if extract_dsnf.SBV_CMP_POB(entity1, entity2):
                 pass
+            debug_logger.debug("SBVorFOB_POB_VOB")
             if extract_dsnf.SBVorFOB_POB_VOB(entity1, entity2):
                 pass
             # [DSNF1]
+            debug_logger.debug("E_NN_E")
             if not extract_dsnf.E_NN_E(entity1, entity2):
                 pass
             # [DSNF3|DSNF5|DSNF6]，并列实体中的主谓宾可能会包含DSNF3
+            debug_logger.debug("coordinate")
             if extract_dsnf.coordinate(entity1, entity2):
                 pass
             # ["的"短语]
+            debug_logger.debug("other last")
             if extract_dsnf.entity_de_entity_NNT(entity1, entity2):
                 pass
             if extract_dsnf.triples != None:
@@ -80,9 +88,10 @@ class Extractor:
             None
         """
         self.entities.clear()  # 清空实体
-        for word in sentence.words:
-            if is_entity(word):
-                self.entities.append(word)
+        self.entities = [word for word in sentence.words if is_named_entity(word)]
+        # for word in sentence.words:
+        #     if is_entity(word):
+        #         self.entities.append(word)
 
     def get_entity_pairs(self, sentence):
         """组成实体对，限制实体对之间的实体数量不能超过4

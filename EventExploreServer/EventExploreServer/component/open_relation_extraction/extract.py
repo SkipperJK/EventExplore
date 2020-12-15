@@ -9,8 +9,6 @@ extractor = Extractor()
 debug_logger = logging.getLogger('debug')
 root_logger = logging.getLogger('root')
 trace_logger = logging.getLogger('trace')
-if 'DEBUG' not in locals().keys():
-    DEBUG = True if debug_logger.level == logging.DEBUG else False
 
 
 def extract_text(text, generalization=True):
@@ -20,6 +18,7 @@ def extract_text(text, generalization=True):
     :return: Triple元素的二维list
     """
     origin_sentences = split_sentence(text)
+    debug_logger.debug("{}".format("\n".join(origin_sentences)))
     lemmas, hidden = nlp.segment(origin_sentences)
     words = nlp.postag(lemmas, hidden)
     words = nlp.nertag(words, hidden)  # add NER tag
@@ -49,16 +48,14 @@ def extract_article(article, idx_document=0, generalization=False):
 
     triples = []
     for idx_sent, sent in enumerate(origin_sentences):
-        if DEBUG:
-            debug_logger.debug(sent)
-            for word in sentences[idx_sent].words:
-                debug_logger.debug(word.to_string())
+        debug_logger.debug(sent)
+        for word in sentences[idx_sent].words:
+            debug_logger.debug(word.to_string())
         triples_of_sent = extractor.extract(sent, sentences[idx_sent], idx_sent, idx_document)
         triples.append(triples_of_sent)
-    if DEBUG:
-        for ts_of_sent in triples:
-            for t in ts_of_sent:
-                debug_logger.debug(t.to_string())
+    for ts_of_sent in triples:
+        for t in ts_of_sent:
+            debug_logger.debug(t.to_string())
 
     if not generalization:
         return triples
@@ -80,8 +77,43 @@ class TestExtract(TestCase):
     """
 
     def test_extract_sent(self):
-        text = "习近平主席访问奥巴马总统先生"
-        extract_text(text)
+        debug_logger.setLevel(logging.DEBUG)
+        # DSNF2：正常，coo verb, sub coo
+        text1 = '''
+        习近平主席访问奥巴马总统。
+       习近平主席访问奥巴马总统先生。习近平主席同志访问奥巴马总统先生。
+       习近平主席视察厦门，李克强访问香港。
+       习近平来我家了，我跑着去迎接。
+       习近平视察并访问厦门。
+       拉里佩奇和谢尔盖布林创建Google。
+       马云创建了阿里巴巴、蚂蚁金服和淘宝。
+       习近平主席同志和奥巴马总统先生一同访问非洲。
+        '''
+
+        # DSNF1
+        text2 = '''
+        中国的主席习近平。
+        美国前任总统奥巴马。
+        华盛顿警方发现证据。
+        '''
+
+        # DSNF2 + DSNF3
+        text3 = "中国国家主席习近平访问韩国，并在首尔大学发表演讲"
+
+        # DSNF2+sub coo
+        text4 = ''''''
+
+        # 不及物动词 DSNF4, DSNF4+sub coo
+        text5 = "奥巴马毕业于哈佛大学。奥巴马和川普毕业于哈佛大学。"
+
+        # DSNF3 1.不及物动词 2.及物动词后无宾语，用介词短语修饰
+        text6 = '''习近平对埃及进行国事访问。
+                习近平在上海视察。
+                习近平在上海视察并讲话。
+                习近平和李克强对埃及进行国事访问。
+                习近平在上海和杭州视察。
+                '''
+        extract_text(text1)
 
     def test_extract(self):
         from EventExploreServer.model import ArticleES
