@@ -213,7 +213,8 @@ class ExtractByDSNF:
             element_str = element.lemma
         return element_str
 
-    def SBV_CMP_POB(self, entity1, entity2):
+    # def SBV_CMP_POB(self, entity1, entity2):
+    def SBV_CMP_POB(self, entity1, entity2, entity1_coo=None, entity2_coo=None, entity_flag=''):
         # TODO; 考虑并列主语或者宾语的情况
         """IVC(Intransitive Verb Construction)[DSNF4]
             不及物动词结构的一种形式，例如："奥巴马毕业于哈弗大学"--->"奥巴马 毕业 于 哈弗 大学"
@@ -233,6 +234,74 @@ class ExtractByDSNF:
         # debug_logger.debug('SBV_CMP_POB - 偏正修正部分：e1:{}, e2:{}'.format(ent1.lemma, ent2.lemma))
         ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
         ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
+
+        ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
+        ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
+
+        entity1_list = []
+        entity2_list = []
+        entity1_list.append(entity1)
+        entity2_list.append(entity2)
+        # 处理多级修饰
+        if ent1 != entity1 and abs(ent1.ID - entity1.ID) == 1:
+            entity1_list.append(ent1)
+            if ent1.dependency == 'ATT' and abs(ent1.head - entity1.ID) <= 3:
+                entity1_list.append(ent1.head_word)
+        if ent2 != entity2 and abs(ent2.ID - entity2.ID) == 1:
+            entity2_list.append(ent2)
+            if ent2.dependency == 'ATT' and abs(ent2.head - entity2.ID) <= 3:
+                entity2_list.append(ent2.head_word)
+
+        relation_list = []
+        if entity_flag == '':
+            print('SBV_CMP_POB Normal')
+            e1_final = self.find_final_entity(entity1)
+            e2_final = self.find_final_entity(entity2)
+            if e2_final.dependency == 'POB' and e2_final.head_word.dependency == 'CMP' \
+                    and e1_final.dependency == 'SBV' and e1_final.head == e2_final.head_word.head:
+                relation_list.append(e1_final.head_word)
+                relation_list.append(e2_final.head_word)
+                pass
+            # if e1_final.dependency == 'SBV' and e2_final.dependency == 'VOB':
+            #     rels = self.determine_relation_SVB(entity1, entity2)
+        elif entity_flag == 'subject' and entity1_coo:
+            print('SBV_CMP_POB sub coo')
+            e1_coo_final = self.find_final_entity(entity1_coo)
+            e2_final = self.find_final_entity(entity2)
+            if e2_final.dependency == 'POB' and e2_final.head_word.dependency == 'CMP' \
+                    and e1_coo_final.dependency == 'SBV' and e1_coo_final.head == e2_final.head_word.head:
+                relation_list.append(e1_coo_final.head_word)
+                relation_list.append(e2_final.head_word)
+            # if e1_coo_final.dependency == 'SBV' and e2_final.dependency == 'VOB':
+            #     rels = self.determine_relation_SVB(entity1_coo, entity2)
+        elif entity_flag == 'object' and entity2_coo:
+            print('SBV_CMP_POB obj coo')
+            e1_final = self.find_final_entity(entity1)
+            e2_coo_final = self.find_final_entity(entity2_coo)
+            if e2_coo_final.dependency == 'POB' and e2_coo_final.head_word.dependency == 'CMP' \
+                    and e1_final.dependency == 'SBV' and e1_final.head == e2_coo_final.head_word.head:
+                relation_list.append(e1_final.head_word)
+                relation_list.append(e2_coo_final.head_word)
+            # if e1_final.dependency == 'SBV' and e2_coo_final.dependency == 'VOB':
+            #     rels = self.determine_relation_SVB(entity1, entity2_coo)
+        elif entity_flag == 'both' and entity1_coo and entity2_coo:
+            print('SBV_CMP_POB both coo')
+            e1_coo_final = self.find_final_entity(entity1_coo)
+            e2_coo_final = self.find_final_entity(entity2_coo)
+            if e2_coo_final.dependency == 'POB' and e2_coo_final.head_word.dependency == 'CMP' \
+                    and e1_coo_final.dependency == 'SBV' and e1_coo_final.head == e2_coo_final.head_word.head:
+                relation_list.append(e1_coo_final.head_word)
+                relation_list.append(e2_coo_final.head_word)
+            # if e1_coo_final.dependency == 'SBV' and e2_coo_final.dependency == 'VOB':
+            #     rels = self.determine_relation_SVB(entity1_coo, entity2_coo)
+        else:
+            debug_logger.debug("ERROR: SBV_CMP_POB entity_flag parameter value:{} is invalid!".format(entity_flag))
+            # error_logger
+
+        if len(relation_list) > 0:
+            self.build_triple(entity1_list, entity2_list, relation_list)
+        return False
+
         if ent2.dependency == 'POB' and ent2.head_word.dependency == 'CMP':
             if ent1.dependency == 'SBV' and ent1.head == ent2.head_word.head:
                 relations = []  # 实体间的关系
@@ -242,6 +311,8 @@ class ExtractByDSNF:
                 return self.build_triple(entity1, entity2, relations)
                 # print(entity1.lemma + '\t' + relations[0].lemma + relations[1].lemma + '\t' + entity2.lemma)
         return False
+
+
 
     def SBV_VOB(self, entity1, entity2, entity1_coo=None, entity2_coo=None, entity_flag=''):
         """TV(Transitive Verb)
@@ -283,25 +354,25 @@ class ExtractByDSNF:
         # 问题：是进入到determin中判断是否符合SBV_VOB结构的。。。。。。
         rels = []
         if entity_flag == '':
-            print('SVB_VOB Normal')
+            print('SBV_VOB Normal')
             e1_final = self.find_final_entity(entity1)
             e2_final = self.find_final_entity(entity2)
             if e1_final.dependency == 'SBV' and e2_final.dependency == 'VOB':
                 rels = self.determine_relation_SVB(entity1, entity2)
         elif entity_flag == 'subject' and entity1_coo:
-            print('SVB_VOB sub coo')
+            print('SBV_VOB sub coo')
             e1_coo_final = self.find_final_entity(entity1_coo)
             e2_final = self.find_final_entity(entity2)
             if e1_coo_final.dependency == 'SBV' and e2_final.dependency == 'VOB':
                 rels = self.determine_relation_SVB(entity1_coo, entity2)
         elif entity_flag == 'object' and entity2_coo:
-            print('SVB_VOB obj coo')
+            print('SBV_VOB obj coo')
             e1_final = self.find_final_entity(entity1)
             e2_coo_final = self.find_final_entity(entity2_coo)
             if e1_final.dependency == 'SBV' and e2_coo_final.dependency == 'VOB':
                 rels = self.determine_relation_SVB(entity1, entity2_coo)
         elif entity_flag == 'both' and entity1_coo and entity2_coo:
-            print('SVB_VOB both coo')
+            print('SBV_VOB both coo')
             e1_coo_final = self.find_final_entity(entity1_coo)
             e2_coo_final = self.find_final_entity(entity2_coo)
             if e1_coo_final.dependency == 'SBV' and e2_coo_final.dependency == 'VOB':
@@ -1021,21 +1092,24 @@ class ExtractByDSNF:
             e1_coo = ent1.head_word
             e2_coo = ent2.head_word
             if e1_coo.dependency == 'SBV' and e2_coo == 'VOB':
-                pass
+                print("Sub COO AND Obj COO")
                 self.SBV_VOB(entity1, entity2, entity1_coo=e1_coo, entity2_coo=e2_coo, entity_flag='both')
                 self.SBVorFOB_POB_VOB(entity1, entity2, entity1_coo=e1_coo, entity2_coo=e2_coo, entity_flag='')
+                self.SBV_CMP_POB(entity1, entity2, entity1_coo=e1_coo, entity2_coo=e2_coo, entity_flag='')
         elif ent1.dependency == 'COO':
             e1_coo = ent1.head_word
             if e1_coo.dependency == 'SBV':
                 print('Sub COO'+str(e1_coo))
                 self.SBV_VOB(entity1, entity2, entity1_coo=e1_coo, entity_flag='subject')
                 self.SBVorFOB_POB_VOB(entity1, entity2, entity1_coo=e1_coo, entity_flag='subject')
+                self.SBV_CMP_POB(entity1, entity2, entity1_coo=e1_coo, entity_flag='subject')
         elif ent2.dependency == 'COO':
             e2_coo = ent2.head_word
             if e2_coo.dependency == 'VOB' or e2_coo.dependency == 'POB': # DSNF2 和 DSNF3的宾语并列
                 print('Obj COO'+str(e2_coo))
                 self.SBV_VOB(entity1, entity2, entity2_coo=e2_coo, entity_flag='object')
                 self.SBVorFOB_POB_VOB(entity1, entity2, entity2_coo=e2_coo, entity_flag='object')
+                self.SBV_CMP_POB(entity1, entity2, entity2_coo=e2_coo, entity_flag='object')
 
         return False
 
