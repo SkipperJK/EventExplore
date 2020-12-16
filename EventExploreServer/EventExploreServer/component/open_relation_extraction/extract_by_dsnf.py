@@ -281,32 +281,31 @@ class ExtractByDSNF:
 
 
         # 问题：是进入到determin中判断是否符合SBV_VOB结构的。。。。。。
-        satisfy = False
-        verbs = []
+        rels = []
         if entity_flag == '':
             print('SVB_VOB Normal')
             e1_final = self.find_final_entity(entity1)
             e2_final = self.find_final_entity(entity2)
             if e1_final.dependency == 'SBV' and e2_final.dependency == 'VOB':
-                verbs = self.determine_relation_SVB(entity1, entity2)
+                rels = self.determine_relation_SVB(entity1, entity2)
         elif entity_flag == 'subject' and entity1_coo:
             print('SVB_VOB sub coo')
             e1_coo_final = self.find_final_entity(entity1_coo)
             e2_final = self.find_final_entity(entity2)
             if e1_coo_final.dependency == 'SBV' and e2_final.dependency == 'VOB':
-                verbs = self.determine_relation_SVB(entity1_coo, entity2)
+                rels = self.determine_relation_SVB(entity1_coo, entity2)
         elif entity_flag == 'object' and entity2_coo:
             print('SVB_VOB obj coo')
             e1_final = self.find_final_entity(entity1)
             e2_coo_final = self.find_final_entity(entity2_coo)
             if e1_final.dependency == 'SBV' and e2_coo_final.dependency == 'VOB':
-                verbs = self.determine_relation_SVB(entity1, entity2_coo)
+                rels = self.determine_relation_SVB(entity1, entity2_coo)
         elif entity_flag == 'both' and entity1_coo and entity2_coo:
             print('SVB_VOB both coo')
             e1_coo_final = self.find_final_entity(entity1_coo)
             e2_coo_final = self.find_final_entity(entity2_coo)
             if e1_coo_final.dependency == 'SBV' and e2_coo_final.dependency == 'VOB':
-                verbs = self.determine_relation_SVB(entity1_coo, entity2_coo)
+                rels = self.determine_relation_SVB(entity1_coo, entity2_coo)
         else:
             debug_logger.debug("ERROR: SBV_VOB entity_flag parameter value:{} is invalid!".format(entity_flag))
             # error_logger
@@ -370,9 +369,7 @@ class ExtractByDSNF:
         #     #     print('find two two two ')
         #     #     return self.determine_relation_SVB(entity1, entity2, ent1, ent2)
         #     verbs = self.determine_relation_SVB(entity1, entity2)
-        for i, v in enumerate(verbs):
-            relation_list = []
-            relation_list.append(v)
+        for i, relation_list in enumerate(rels):
             if i == 0:
                 debug_logger.debug("-"*10+"SVB DSNF2"+'-'*10)
             else:
@@ -461,7 +458,7 @@ class ExtractByDSNF:
                     verbs.append(word_tmp.head_word)
                 else:
                     verb_coos = []
-                    verb_tmp = self.find_final_entity(ent2).head_word
+                    verb_tmp = ent2.head_word
                     # 找到与ent2相关的所有并列的verbs
                     while verb_tmp:
                         verb_coos.append(verb_tmp)
@@ -521,15 +518,18 @@ class ExtractByDSNF:
         # for rel in relation_list:
         #     print('rel'+str(rel))
 
-        return verbs
+        rels = []
+        # return verbs
         for i, v in enumerate(verbs):
             relation_list = []
             relation_list.append(v)
-            if i == 0:
-                debug_logger.debug("-"*10+"SVB DSNF2"+'-'*10)
-            else:
-                debug_logger.debug("-"*10+"SVB verb coo DSNF7"+'-'*10)
-            self.build_triple(entity1_list, entity2_list, relation_list)
+            rels.append(relation_list)
+            # if i == 0:
+            #     debug_logger.debug("-"*10+"SVB DSNF2"+'-'*10)
+            # else:
+            #     debug_logger.debug("-"*10+"SVB verb coo DSNF7"+'-'*10)
+            # self.build_triple(entity1_list, entity2_list, relation_list)
+        return rels
         return False
 
 
@@ -671,7 +671,7 @@ class ExtractByDSNF:
     #                 is_ok = self.SBVorFOB_POB_VOB(entity1, entity_object, entity_coo=entity2, entity_flag='object')
     #     return False
 
-    def SBVorFOB_POB_VOB(self, entity1, entity2, entity_coo=None, entity_flag=''):
+    def SBVorFOB_POB_VOB(self, entity1, entity2, entity1_coo=None, entity2_coo=None,  entity_flag=''):
         """[DSNF3]
             实体1依存于V(SBV或前置宾语)，实体2依存于一个介词(POB)，且介词依存于V(ADV)，一个名词(将作为特征关系词)依存于Ｖ(VOB)
             习近平 对 埃及 进行 国事访问
@@ -703,23 +703,60 @@ class ExtractByDSNF:
         # ent2 = self.check_entity(entity2)
         # debug_logger.debug('SBVorFOB_POB_VOB - 偏正修正部分：e1:{}, e2:{}'.format(ent1.lemma, ent2.lemma))
         rels = []
-        if ent1.dependency == 'SBV' or ent1.dependency == 'FOB':
-            if ent2.dependency == 'POB' and ent2.head_word.dependency == 'ADV':
-                if entity_coo:
-                    if entity_flag == 'subject': # 主语并列
-                        return self.determine_relation_SVP(entity_coo, entity2)
-                    else: # 宾语并列
-                        return self.determine_relation_SVP(entity1, entity_coo)
-                else:
-                    # return self.determine_relation_SVP(entity1, entity2, ent1, ent2)
-                    rels = self.determine_relation_SVP(entity1, entity2)
+        prep = ''  # 考虑特殊介词'被' or '由':
+        if entity_flag == '':
+            print('SVB_POB_VOB Normal')
+            e1_final = self.find_final_entity(entity1)
+            e2_final = self.find_final_entity(entity2)
+            if (e1_final.dependency == 'SBV' or e1_final.dependency == 'FOB')\
+                    and e2_final.dependency == 'POB' and e2_final.head_word.dependency == 'ADV':
+                rels, prep = self.determine_relation_SVP(entity1, entity2)
+        elif entity_flag == 'subject' and entity1_coo:
+            print('SBV_POB_VOB sub coo')
+            e1_coo_final = self.find_final_entity(entity1_coo)
+            e2_final = self.find_final_entity(entity2)
+            if (e1_coo_final.dependency == 'SBV' or e1_coo_final.dependency == 'FOB') \
+                    and e2_final.dependency == 'POB' and e2_final.head_word.dependency == 'ADV':
+                rels, prep = self.determine_relation_SVP(entity1_coo, entity2)
+        elif entity_flag == 'object' and entity2_coo:
+            print('SBV_POB_VOB obj coo')
+            e1_final = self.find_final_entity(entity1)
+            e2_coo_final = self.find_final_entity(entity2_coo)
+            if (e1_final.dependency == 'SBV' or e1_final.dependency == 'FOB') \
+                    and e2_coo_final.dependency == 'POB' and e2_coo_final.head_word.dependency == 'ADV':
+                rels, prep = self.determine_relation_SVP(entity1, entity2_coo)
+        elif entity_flag == 'both' and entity1_coo and entity2_coo:
+            print('SBV_POB_VOB both coo')
+            e1_coo_final = self.find_final_entity(entity1_coo)
+            e2_coo_final = self.find_final_entity(entity2_coo)
+            if (e1_coo_final.dependency == 'SBV' or e1_coo_final.dependency == 'FOB') \
+                    and e2_coo_final.dependency == 'POB' and e2_coo_final.head_word.dependency == 'ADV':
+                rels, prep = self.determine_relation_SVP(entity1_coo, entity2_coo)
+        else:
+            debug_logger.debug("ERROR: SBV_POB_VOB entity_flag parameter value:{} is invalid!".format(entity_flag))
+            # error_logger
+
+
+        # if ent1.dependency == 'SBV' or ent1.dependency == 'FOB':
+        #     if ent2.dependency == 'POB' and ent2.head_word.dependency == 'ADV':
+        #         if entity_coo:
+        #             if entity_flag == 'subject': # 主语并列
+        #                 return self.determine_relation_SVP(entity_coo, entity2)
+        #             else: # 宾语并列
+        #                 return self.determine_relation_SVP(entity1, entity_coo)
+        #         else:
+        #             # return self.determine_relation_SVP(entity1, entity2, ent1, ent2)
+        #             rels = self.determine_relation_SVP(entity1, entity2)
 
         for i, relation_list in enumerate(rels):
             if i == 0:
                 debug_logger.debug("-" * 10 + "SBVorFOB_POB_VOB DSNF3" + '-' * 10)
             else:
                 debug_logger.debug("-" * 10 + "SBVorFOB_POB_VOB verb coo DSNF3" + '-' * 10)
-            self.build_triple(entity1_list, entity2_list, relation_list)
+            if prep == '被' or prep == '由':
+                self.build_triple(entity2_list, entity1_list, relation_list)
+            else:
+                self.build_triple(entity1_list, entity2_list, relation_list)
 
 
         return False
@@ -763,6 +800,9 @@ class ExtractByDSNF:
 
         ent1 = self.check_entity(entity1)
         ent2 = self.check_entity(entity2)
+        ent1 = self.find_final_entity(entity1)
+        ent2 = self.find_final_entity(entity2)
+
         verbs = [] # 可能存在并列动词: 如果并列的话确保是符合DSNF3结构的并列动词
         # NOTE: 根据ent2来寻找verb更合理
         found_flag = False
@@ -774,6 +814,8 @@ class ExtractByDSNF:
                 verbs.append(word_tmp.head_word)
                 found_flag = True
             word_tmp = word_tmp.head_word
+            # TODO; ent1 和 ent2 不是同一个动词
+
         debug_logger.debug("Found verbs: {}".format(" ".join([str(word) for word in verbs])))
         # 查找是否存在并列verb
         if len(verbs) > 0:
@@ -863,7 +905,7 @@ class ExtractByDSNF:
 
             rels.append(relation_list)
 
-        return rels
+        return rels, prep
         #     # 考虑特殊介词
         #     if prep == '被' or prep == '由':
         #         # TODO; 多个triples,不能使用return
@@ -981,19 +1023,19 @@ class ExtractByDSNF:
             if e1_coo.dependency == 'SBV' and e2_coo == 'VOB':
                 pass
                 self.SBV_VOB(entity1, entity2, entity1_coo=e1_coo, entity2_coo=e2_coo, entity_flag='both')
-                # self.SBVorFOB_POB_VOB(self, entity1, entity2, entity_coo=None, entity_flag='')
+                self.SBVorFOB_POB_VOB(entity1, entity2, entity1_coo=e1_coo, entity2_coo=e2_coo, entity_flag='')
         elif ent1.dependency == 'COO':
             e1_coo = ent1.head_word
             if e1_coo.dependency == 'SBV':
                 print('Sub COO'+str(e1_coo))
                 self.SBV_VOB(entity1, entity2, entity1_coo=e1_coo, entity_flag='subject')
-                # self.SBVorFOB_POB_VOB(entity1, entity2, entity_coo=e1_coo, entity_flag='subject')
+                self.SBVorFOB_POB_VOB(entity1, entity2, entity1_coo=e1_coo, entity_flag='subject')
         elif ent2.dependency == 'COO':
             e2_coo = ent2.head_word
-            if e2_coo.dependency == 'VOB':
+            if e2_coo.dependency == 'VOB' or e2_coo.dependency == 'POB': # DSNF2 和 DSNF3的宾语并列
                 print('Obj COO'+str(e2_coo))
                 self.SBV_VOB(entity1, entity2, entity2_coo=e2_coo, entity_flag='object')
-                # self.SBVorFOB_POB_VOB(entity1, entity2, entity_coo=e2_coo, entity_flag='object')
+                self.SBVorFOB_POB_VOB(entity1, entity2, entity2_coo=e2_coo, entity_flag='object')
 
         return False
 
