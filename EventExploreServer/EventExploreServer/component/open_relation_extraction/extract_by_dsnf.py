@@ -456,36 +456,37 @@ class ExtractByDSNF:
             # 习近平主席视察厦门，李克强访问香港。
             # 实现1，2，3并解决 习近平 视察 香港 错误。
             if word_tmp.dependency == 'SBV':
-                is_verb_satify = False
                 if word_tmp.head == ent2.head:
-                    is_verb_satify = True
-                    # verbs.append(word_tmp.head_word)
-                    # found_flag = True
-                else:
-                   is_verb_satify = True
-                   verb_coos = []
-                   verb_tmp = self.find_final_entity(ent2).head_word
-                   # 找到与ent2相关的所有并列的verbs
-                   while verb_tmp:
-                       verb_coos.append(verb_tmp)
-                       if verb_tmp.dependency=='COO':
-                           verb_tmp = verb_tmp.head_word
-                       else:
-                           break
-                   print('aaa: verbs_coo: {}'.format(" ".join(str(word) for word in verb_coos)))
-                   # 检查是否存在verb的主语不是ent1，如果存在，不成立
-                   for verb in verb_coos:
-                       for word_ID in range(ent1.ID+1, verb.ID):
-                           w = self.sentence.get_word_by_id(word_ID)
-                           if w.dependency=='SBV' and w.head_word==verb and w!=ent1:
-                               is_verb_satify = False
-                               break
-                if is_verb_satify:
                     print("verb sat")
                     verbs.append(word_tmp.head_word)
-                    found_flag = True
                 else:
-                    print("Verb not sat")
+                    verb_coos = []
+                    verb_tmp = self.find_final_entity(ent2).head_word
+                    # 找到与ent2相关的所有并列的verbs
+                    while verb_tmp:
+                        verb_coos.append(verb_tmp)
+                        if verb_tmp.dependency == 'COO':
+                            verb_tmp = verb_tmp.head_word
+                        else:
+                            break
+                    print('aaa: verbs_coo: {}'.format(" ".join(str(word) for word in verb_coos)))
+                    for verb in verb_coos:
+                        is_verb_satify = True
+                        # 如果verb存在宾语并且宾语不是ent2，不成立
+                        for word_ID in range(verb.ID+1, ent2.ID):
+                            w = self.sentence.get_word_by_id(word_ID)
+                            if w.dependency=='VOB' and w.head_word==verb and w!=ent2:
+                                is_verb_satify = False
+                                break
+                        # 如果verb的主语不是ent1，不成立
+                        for word_ID in range(ent1.ID + 1, verb.ID):
+                            w = self.sentence.get_word_by_id(word_ID)
+                            if w.dependency=='SBV' and w.head_word==verb and w!=ent1:
+                                is_verb_satify = False
+                                break
+                        # 将满足条件的verb加入verbs中
+                        if is_verb_satify:
+                            verbs.append(verb)
             word_tmp = word_tmp.head_word
         # 查找是否存在并列verb
         if len(verbs) > 0:
@@ -774,7 +775,8 @@ class ExtractByDSNF:
                 found_flag = True
             word_tmp = word_tmp.head_word
         debug_logger.debug("Found verbs: {}".format(" ".join([str(word) for word in verbs])))
-        if len(verbs) > 0: # 有第一个verb之后才会有并列的verb
+        # 查找是否存在并列verb
+        if len(verbs) > 0:
             id_tmp = verbs[0].ID
             while id_tmp < len(self.sentence.words)+1: # 这里动词在ent2的后面，区别于SBV-VOB结构
                 word_tmp = self.sentence.get_word_by_id(id_tmp)
@@ -968,9 +970,10 @@ class ExtractByDSNF:
         # ent1 = self.check_entity(entity1)
         # ent2 = self.check_entity(entity2)
         # debug_logger.debug('coordinate - 偏正修正部分：e1:{}, e2:{}'.format(ent1.lemma, ent2.lemma))
-        ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
-        ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
-
+        # ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
+        # ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
+        ent1 = self.find_final_entity(entity1)
+        ent2 = self.find_final_entity(entity2)
 
         if ent1.dependency == 'COO' and ent2.dependency == 'COO':
             e1_coo = ent1.head_word
