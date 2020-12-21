@@ -41,7 +41,7 @@ class TripleUnit:
             )
 
 
-    def __init__(self, entity1_list, relationship_list, entity2_list, sent_num=0, doc_num=0, num=0):
+    def __init__(self, entity1_list, relationship_list, entity2_list, type='', sent_num=0, doc_num=0, num=0):
         """
         关系三元组，entity和relationship由单个/多个word组成，将单个的也转换为list
         :param doc_num: int
@@ -53,18 +53,25 @@ class TripleUnit:
         self.doc_num = doc_num
         self.sent_num = sent_num
         self.num = num
-        if isinstance(entity1_list, list):
-            self.entity1_list = [entity for entity in entity1_list if entity]
-        else:
-            self.entity1_list = [entity1_list]
-        if isinstance(relationship_list, list):
-            self.relationship_list = [entity for entity in relationship_list if entity]
-        else:
-            self.relationship_list = [relationship_list]
-        if isinstance(entity2_list, list):
-            self.entity2_list = [entity for entity in entity2_list if entity]
-        else:
-            self.entity2_list = [entity2_list]
+        self.entity1_list = entity1_list
+        self.entity2_list = entity2_list
+        self.type = type
+        self.relationship_list = relationship_list
+        self.entity1 = self.entity1_list[0]
+        self.entity2 = self.entity2_list[0]
+
+        # if isinstance(entity1_list, list):
+        #     self.entity1_list = [entity for entity in entity1_list if entity]
+        # else:
+        #     self.entity1_list = [entity1_list]
+        # if isinstance(relationship_list, list):
+        #     self.relationship_list = [entity for entity in relationship_list if entity]
+        # else:
+        #     self.relationship_list = [relationship_list]
+        # if isinstance(entity2_list, list):
+        #     self.entity2_list = [entity for entity in entity2_list if entity]
+        # else:
+        #     self.entity2_list = [entity2_list]
 
         # debug_logger.debug('Entity 是什么：：：{},{}'.format(self.entity1_list, self.entity2_list))
         self.e1_lemma = ''.join([word.lemma for word in self.entity1_list])
@@ -103,12 +110,44 @@ class TripleUnit:
 
 
     def to_string(self):
-        return "Num:{0:>3d}, DocID: {1:>3d}, SentenceID: {2:>3d}, {3:s}".format(
+        return "Num:{0:>3d}, DocID: {1:>3d}, SentenceID: {2:>3d}, Type: {3:>10s}, {4:s}".format(
             self.num,
             self.doc_num,
             self.sent_num,
+            self.type,
             str(self)
         )
+
+    def convert2knowledge(self):
+        attrs = []
+        relation = {}
+        # TODO; 如何给属性命名？
+        if len(self.entity1_list) > 1:
+            attr = {}
+            attr['sub'] = {}
+            attr['sub']['word'] = self.entity1.lemma
+            attr['sub']['nertag'] = self.entity1.nertag
+            attr['sub']['postag'] = self.entity1.postag
+            attr['attr'] = self.entity1_list[1].lemma
+            attrs.append(attr)
+        if len(self.entity2_list) > 1:
+            attr = {}
+            attr['sub'] = {}
+            attr['sub']['word'] = self.entity2.lemma
+            attr['sub']['nertag'] = self.entity2.nertag
+            attr['sub']['postag'] = self.entity2.postag
+            attr['attr'] = self.entity2_list[1].lemma
+            attrs.append(attr)
+        relation['sub'] = {}
+        relation['sub']['word'] = self.entity1.lemma
+        relation['sub']['nertag'] = self.entity1.nertag
+        relation['sub']['postag'] = self.entity1.postag
+        relation['obj'] = {}
+        relation['obj']['word'] = self.entity2.lemma
+        relation['obj']['nertag'] = self.entity2.nertag
+        relation['obj']['postag'] = self.entity2.postag
+        relation['verb'] = "".join([word.lemma for word in self.relationship_list])
+        return attrs, relation
 
 
     def __str__(self):
