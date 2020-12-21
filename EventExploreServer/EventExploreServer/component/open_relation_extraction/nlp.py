@@ -18,8 +18,13 @@ class NLP:
         self.ltp = LTP(path=default_model_dir)
         for file in os.listdir(user_dict_dir):
             self.ltp.init_dict(path=os.path.join(user_dict_dir, file))
+        self.sentences = []
+        self.postags = []
+        self.nertags = []
+        self.dep = []
 
     def segment(self, sentences):
+        self.sentences = sentences
         lemmas, hidden = self.ltp.seg(sentences)
         return lemmas, hidden
 
@@ -32,6 +37,7 @@ class NLP:
         """
         words = []
         postags = self.ltp.pos(hidden)
+        self.postags = postags
         for idx_sent, postags_sent in enumerate(postags):
             words_sent = []
             for i in range(len(postags_sent)):
@@ -53,6 +59,7 @@ class NLP:
         """
         # Nh 人名     Ni 机构名      Ns 地名
         nertags = self.ltp.ner(hidden)
+        self.nertags = nertags
         '''
         为了进行三元组提取，使用到ner信息，需要将一些ner分析后的词进行合并得到新词。
         NOTE：NER之后可能将一些tokens合并成一个word
@@ -88,12 +95,14 @@ class NLP:
                 if i < len(dep_sent):  # [(1, 2, 'ATT'), (2, 3, 'ATT')]] 省略了(3, 0, 'HED)
                     words[idx_sent][i].head = dep_sent[i][1]
                     words[idx_sent][i].dependency = dep_sent[i][2]
-            sentences.append(SentenceUnit(words[idx_sent]))
+            sentences.append(SentenceUnit(self.sentences[idx_sent], self.nertags[idx_sent], words[idx_sent]))
         return sentences
 
 
 if __name__ == '__main__':
     sent = ["高克访问中国，并在同济大学发表演讲。"]
+
+    sentences = []
     nlp = NLP()
     lemmas, hidden = nlp.segment(sent)
     print(lemmas)
@@ -103,3 +112,4 @@ if __name__ == '__main__':
     for sent in sentences:
         for word in sent.words:
             print(word.__dict__)
+        print(sent.get_name_entities())
