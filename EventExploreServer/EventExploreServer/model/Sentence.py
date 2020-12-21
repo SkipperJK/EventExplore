@@ -10,7 +10,9 @@ class SentenceUnit:
     """
     words = None
 
-    def __init__(self, words):
+    def __init__(self, origin_sentence, nertags,  words):
+        self.origin_sentence = origin_sentence
+        self.nertags = nertags
         self.words = words
         for i in range(len(words)):
             self.words[i].head_word = self.get_word_by_id(self.words[i].head)
@@ -59,14 +61,15 @@ class SentenceUnit:
             lemmas += word.lemma + '\t'
         return lemmas.rstrip('\t')
 
-    # def get_name_entities(self):
-    #     """根据命名实体标记获取命名实体
-    #     :return:
-    #     """
-    #     name_entities = []
-    #     for tag in self.nertags:
-    #         name_entities.append((tag[0], ''.join([self.words[idx].lemma for idx in range(tag[1], tag[2]+1)])))
-    #     return name_entities
+    def get_name_entities(self):
+        """根据命名实体标记获取命名实体
+        :return:
+        """
+        name_entities = []
+        for tag in self.nertags:
+            # name_entities.append((tag[0], ''.join([self.words[idx].lemma for idx in range(tag[1], tag[2]+1)])))
+            name_entities.append(''.join([self.words[idx].lemma for idx in range(tag[1], tag[2] + 1)]))
+        return name_entities
 
 
 
