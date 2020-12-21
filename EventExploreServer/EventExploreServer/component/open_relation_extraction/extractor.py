@@ -29,6 +29,7 @@ class Extractor:
         """
         debug_logger.debug("Sentence: {:s}".format(origin_sentence))
         debug_logger.debug("DP result:\n {:s}".format(sentence.to_string()))
+        debug_logger.debug("Name Entities: {:s}".format(', '.join(sentence.get_name_entities())))
         self.triples = []
         self.get_entities(sentence)
         self.get_entity_pairs(sentence)
@@ -50,29 +51,43 @@ class Extractor:
 
             extract_dsnf = ExtractByDSNF(origin_sentence, sentence, entity1, entity2, idx_sentence, idx_document, self.num)
             # ? 一个entity pair可能提取出多个triples吗？
-            # [DSNF2|DSNF7]，部分覆盖[DSNF5|DSNF6]
-            debug_logger.debug("SBV_VOB")
-            if extract_dsnf.SBV_VOB(entity1, entity2):
-                pass
-            # [DSNF4]
-            debug_logger.debug("SBV_CMP_POB, DSNF4")
-            if extract_dsnf.SBV_CMP_POB(entity1, entity2):
-                pass
-            debug_logger.debug("SBVorFOB_POB_VOB")
-            if extract_dsnf.SBVorFOB_POB_VOB(entity1, entity2):
-                pass
             # [DSNF1]
-            debug_logger.debug("E_NN_E")
-            if not extract_dsnf.E_NN_E(entity1, entity2):
-                pass
+            debug_logger.debug("Level 1: E_NN_E")
+            extract_dsnf.E_NN_E(entity1, entity2)
+            # [DSNF2|DSNF7]，部分覆盖[DSNF5|DSNF6]
+            debug_logger.debug("Level 1: SBV_VOB")
+            extract_dsnf.SBV_VOB(entity1, entity2)
+            # [DSNF4]
+            debug_logger.debug("Level 1: SBV_CMP_POB, DSNF4")
+            extract_dsnf.SBV_CMP_POB(entity1, entity2)
+            debug_logger.debug("Level 1: SBVorFOB_POB_VOB")
+            extract_dsnf.SBVorFOB_POB_VOB(entity1, entity2)
             # [DSNF3|DSNF5|DSNF6]，并列实体中的主谓宾可能会包含DSNF3
-            debug_logger.debug("coordinate")
-            if extract_dsnf.coordinate(entity1, entity2):
-                pass
-            # ["的"短语]
-            debug_logger.debug("other last")
-            if extract_dsnf.entity_de_entity_NNT(entity1, entity2):
-                pass
+            debug_logger.debug("Level 1: coordinate")
+            extract_dsnf.coordinate(entity1, entity2)
+
+            # debug_logger.debug("SBV_VOB")
+            # if extract_dsnf.SBV_VOB(entity1, entity2):
+            #     pass
+            # # [DSNF4]
+            # debug_logger.debug("SBV_CMP_POB, DSNF4")
+            # if extract_dsnf.SBV_CMP_POB(entity1, entity2):
+            #     pass
+            # debug_logger.debug("SBVorFOB_POB_VOB")
+            # if extract_dsnf.SBVorFOB_POB_VOB(entity1, entity2):
+            #     pass
+            # # [DSNF1]
+            # debug_logger.debug("E_NN_E")
+            # if not extract_dsnf.E_NN_E(entity1, entity2):
+            #     pass
+            # # [DSNF3|DSNF5|DSNF6]，并列实体中的主谓宾可能会包含DSNF3
+            # debug_logger.debug("coordinate")
+            # if extract_dsnf.coordinate(entity1, entity2):
+            #     pass
+            # # ["的"短语]
+            # debug_logger.debug("other last")
+            # # if extract_dsnf.entity_de_entity_NNT(entity1, entity2):
+            # #     pass
             if extract_dsnf.triples != None:
                 self.num += len(extract_dsnf.triples)
                 self.triples.extend(extract_dsnf.triples)
