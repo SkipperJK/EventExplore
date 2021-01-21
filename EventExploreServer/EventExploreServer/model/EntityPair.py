@@ -1,5 +1,5 @@
 from django.test import TestCase
-from EventExploreServer.model.Word import WordUnit
+from EventExploreServer.model import WordUnit
 
 
 class EntityPairUnit:
@@ -21,6 +21,10 @@ class EntityPairUnit:
         return self.entity2
     def set_entity2(self, entity2):
         self.entity2 = entity2
+
+    def get_pair(self):
+        return (self.entity1, self.entity2)
+
 
     def to_string(self):
         return "{{E1:{0:{2}>10s}, E2:{1:{2}>10s}}}".format(

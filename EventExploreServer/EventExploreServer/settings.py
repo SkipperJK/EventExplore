@@ -41,9 +41,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -52,14 +55,19 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+# 允许所有域名跨域(优先选择)
+CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOW_CREDENTIALS = True
+
 
 ROOT_URLCONF = 'EventExploreServer.urls'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')]
-        ,
+        # 'DIRS': [os.path.join(BASE_DIR, 'templates')],
+        # 使用vue前端
+        'DIRS': [os.path.join(BASE_DIR, 'appfront/dist')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -124,9 +132,14 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.1/howto/static-files/
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = (
-    # os.path.join(BASE_DIR, 'static'),
-    BASE_DIR / "static",
-)
+# STATICFILES_DIRS = (
+#     # os.path.join(BASE_DIR, 'static'),
+#     BASE_DIR / "static",
+# )
+# add for vue.js
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "appfront/dist/static"),
+    os.path.join(BASE_DIR, 'static'),
+]
 # print(STATICFILES_DIRS)
 fileConfig('logging.conf')

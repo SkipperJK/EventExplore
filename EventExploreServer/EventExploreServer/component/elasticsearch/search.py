@@ -5,17 +5,19 @@ from config import ES_HOSTS, ES_INDEX
 import jieba.posseg as pseg
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import scan
-from EventExploreServer.model.ArticleES import ArticleES
+from EventExploreServer.model import ArticleES
 
 es = Elasticsearch(ES_HOSTS)
 debug_logger = logging.getLogger('debug')
 root_logger = logging.getLogger('root')
+trace_logger = logging.getLogger('trace')
 
-def search_all(index, size=10):
+def search_all_do(index, size=10, func=None, func_return_type='list'):
     """
-    检索指定索引中的所有文章
-    TODO；根据文章types过滤
+    检索指定索引中的所有文章，如果指定func，则对每篇文章执行func
     :param index:
+    :param size: None表示全部，数字表示指定文章数量
+    :param func:
     :return:
     """
     action = {
@@ -24,15 +26,37 @@ def search_all(index, size=10):
         }
     }
     articles = []
-    resps = scan(es, action, scroll="10m", index=index)
+    rets = []
+    if func and func_return_type == 'dict':
+        rets = {}
+
+    resps = scan(es, action, scroll="1000m", index=index)
     count = 0
-    for item in resps:
-        if count >= size: break
-        # score = item['_score']
-        source = item['_source']
-        articles.append(ArticleES(**source))
-        count += 1
-    return articles
+    try:
+        for item in resps:
+            if size and count >= size: break
+            # score = item['_score']
+            source = item['_source']
+            trace_logger.info("Num: {}, Article Title: {}".format(count, source['title']))
+            art = ArticleES(**source)
+            articles.append(art)
+            if func:
+                ret = func(art)
+                if isinstance(ret, list):
+                    rets += ret
+                elif isinstance(ret, dict):
+                    for key, value in ret.items():
+                        if key not in rets:
+                            rets[key] = value
+                else:
+                    ret.append(ret)
+            count += 1
+    except Exception as e:
+        root_logger.info("ES indexing error : {}".format(e))
+    if func:
+        return rets
+    else:
+        return articles
 
 
 def search_articles(text, index, size):
@@ -136,7 +160,7 @@ class TESTES(TestCase):
 
     def test_search_all(self):
         from config import ENTMT_ES_INDEX
-        arts = search_all(ENTMT_ES_INDEX)
+        arts = search_all_do(ENTMT_ES_INDEX)
         print(len(arts))
 
 
@@ -165,6 +189,27 @@ class TESTES(TestCase):
             scores.append(article.score)
             # print(article.__dict__)
             # debug_logger.debug(article.__dict__)
+
+    def test_from_size_search(self):
+        from config import ENTMT_ES_INDEX
+        action = {
+            "query": {
+                "match_all": {}
+            },
+            "size": 10,
+            "from": 100000
+        }
+
+        # res = es.search(body=action, index=ES_INDEX)
+        res = es.search(body=action, index=ENTMT_ES_INDEX)
+        for item in res['hits']['hits']:
+            source = item['_source']
+            print(source['title'])
+
+        # print('search_all_do')
+        # arts = search_all_do(ENTMT_ES_INDEX, 5)
+        # for art in arts:
+        #     print(art.title)
 
     '''ES return item
     {

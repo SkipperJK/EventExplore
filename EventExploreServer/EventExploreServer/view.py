@@ -5,10 +5,13 @@ from django.shortcuts import render
 from django.http import HttpResponse
 from django.views import generic
 from rest_framework.views import APIView
-from EventExploreServer.component import search_articles
-from EventExploreServer.component import extract_text
+from rest_framework.response import Response
+from EventExploreServer.model import TripleUnit
+from EventExploreServer.component import extract_text, exact_search_articles
 from EventExploreServer.component.word_link.explore import explore
-from EventExploreServer.model.serializers import ArticleESSerializer, TripleSerializer
+from EventExploreServer.model.serializers import ArticleESSerializer, TripleSerializer, SentenceSerializer
+from EventExploreServer.component import annotate_text,annotate_sentence
+from EventExploreServer.component import extract_rules
 
 trace_logger = logging.getLogger('trace')
 
@@ -75,13 +78,21 @@ def echart_test(request):
 
 def search_relative_articles(request, topic):
     trace_logger.info("searching {} relative article".format(topic))
-    articles = search_articles(topic)
+    articles = exact_search_articles(topic)
     return HttpResponse(json.dumps(articles, default=lambda obj: obj.__dict__))
+
+
+class MainView(APIView):
+    def get(self, request):
+        return render(request, 'main.html')
+
+    def post(self, request):
+        pass
 
 
 class SearchView(APIView):
     def get(self, request, topic):
-        articles = search_articles(topic)
+        articles = exact_search_articles(topic)
         return HttpResponse(ArticleESSerializer(articles, many=True).data)
 
 
@@ -107,10 +118,61 @@ class EventExplore(APIView):
     def get(self, request, topic):
         trace_logger.info("EventExplore ----- Topic: {} -----".format(topic))
         return HttpResponse(json.dumps("ttttt"))
-        articles = search_articles(topic)
+        articles = exact_search_articles(topic)
         data = explore(articles)
         print('-------', data)
         return HttpResponse(json.dumps(data))
 
-    def post(self, requet):
+    def post(self, request):
         pass
+
+
+class OpenREView(APIView):
+    def get(self, request, text):
+        pass
+
+    def post(self, request):
+        pass
+
+
+class AnnotateView(APIView):
+    def get(self, request):
+        pass
+
+    def post(self, request):
+        trace_logger.info("对待标注文本进行处理...")
+        query = dict(request.data)
+        trace_logger.info("提交的内容: {}".format(query))
+        sentences = annotate_text(query['text'])
+        jsonData = SentenceSerializer(sentences, many=True).data
+        trace_logger.info("返回处理之后的内容: {} 给前端。".format(jsonData))
+        return Response(jsonData)
+
+
+
+class LabelView(APIView):
+    def get(self, request):
+        pass
+
+    def post(self, request):
+        labeled_data = dict(request.data)
+        trace_logger.info("处理提交的标注信息：{}".format(labeled_data))
+        sentence = annotate_sentence(labeled_data['origin_sentence'])
+        triples = []
+        for triple in labeled_data['triples']:
+            entity1_list = [sentence.words[idx] for idx in triple['idx_e1']]
+            relation_list = [sentence.words[idx] for idx in triple['idx_rel']]
+            entity2_list = [sentence.words[idx] for idx in triple['idx_e2']]
+            t = TripleUnit(entity1_list, relation_list, entity2_list)
+            triples.append(t)
+
+        extract_rules(triples, sentence)
+        # rules = extract_rules(triples, sentence)
+        # for rule in rules:
+        #     trace_logger.info("Rule: "+rule.to_string())
+
+        # 根据标记信息提取规则
+        retData = "Successed"
+        trace_logger.info("抽取标注数据规则完成。")
+
+        return Response(retData)

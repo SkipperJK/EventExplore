@@ -2,8 +2,8 @@ import os
 import logging
 from ltp import LTP
 from config import LTP4_MODEL_DIR, USER_DICT_DIR
-from EventExploreServer.model.Word import WordUnit
-from EventExploreServer.model.Sentence import SentenceUnit
+from EventExploreServer.model import WordUnit
+from EventExploreServer.model import SentenceUnit
 
 trace_logger = logging.getLogger('trace')
 
@@ -93,17 +93,27 @@ class NLP:
         for idx_sent, dep_sent in enumerate(dep):
             for i in range(len(words[idx_sent])):
                 if i < len(dep_sent):  # [(1, 2, 'ATT'), (2, 3, 'ATT')]] 省略了(3, 0, 'HED)
-                    words[idx_sent][i].head = dep_sent[i][1]
+                    words[idx_sent][i].head = dep_sent[i][1] # 记录的是word的ID，不是下标
                     words[idx_sent][i].dependency = dep_sent[i][2]
+                    # 同时记录每个词的在dp树上的子节点
+                    ## dep_sent[i][1]是head_word的ID
+                    ## child_words记录：子节点ID和边的依赖
+                    words[idx_sent][dep_sent[i][1]-1].child_words.append((dep_sent[i][0], dep_sent[i][2]))
             sentences.append(SentenceUnit(self.sentences[idx_sent], self.nertags[idx_sent], words[idx_sent]))
         return sentences
 
+nlp = NLP()
 
 if __name__ == '__main__':
-    sent = ["高克访问中国，并在同济大学发表演讲。"]
+    sent = [
+        "高克访问中国，并在同济大学发表演讲。",
+        "苹果营养丰富。",
+        "帕特里夏将她与加里·库珀的关系描述为她一生中最美丽的事物之一。",
+        "毕业于哈佛法学院的奥巴马总统。"
+    ]
 
     sentences = []
-    nlp = NLP()
+    # nlp = NLP()
     lemmas, hidden = nlp.segment(sent)
     print(lemmas)
     words_postag = nlp.postag(lemmas, hidden)

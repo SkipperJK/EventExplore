@@ -1,6 +1,8 @@
+from django.db import models
 from django.test import TestCase
 
-
+# 使用Model序列化的对象是直接在类中定义类变量
+# class WordUnit(models.Model):
 class WordUnit:
     """词单元组成
     postag标签
@@ -12,6 +14,10 @@ class WordUnit:
         'Ni' 机构名
         'Ns' 地名
     """
+
+    class Meta:
+        app_label = 'entire'
+
     # 定义类变量
     # 当前词在句子中的序号，1开始
     ID = 0
@@ -25,7 +31,7 @@ class WordUnit:
     # 当前词语与中心词的依存关系
     dependency = '' # 每个词都有指向自己的唯一依存
 
-    def __init__(self, ID, lemma, postag, nertag='', head=0, head_word=None, dependency='', hidden=None):
+    def __init__(self, ID, lemma, postag, nertag='', head=0, head_word=None, dependency='', child_words=None, hidden=None):
         self.ID = ID
         self.lemma = lemma
         self.postag = postag
@@ -33,6 +39,7 @@ class WordUnit:
         self.head = head
         self.head_word = head_word
         self.dependency = dependency
+        self.child_words = child_words if child_words else [] # child_words元素：(子节点ID,边的依赖)
         self.hidden = hidden
 
     def get_id(self):
@@ -76,7 +83,7 @@ class WordUnit:
             word_str: str，转换后的字符串
         """
         return "ID: {0:>2d}, lemma: {1:{7}>5s}, postag: {2:>3s}, " \
-               "nertag: {3:>3s}, head: {4:>5d}, head_word: {5:{7}>5s}, dependency: {6:>5s}".format(
+               "nertag: {3:>3s}, head: {4:>5d}, head_word: {5:{7}>5s}, dependency: {6:>5s}, child_words:{8}".format(
             self.ID,
             self.lemma,
             self.postag,
@@ -84,7 +91,8 @@ class WordUnit:
             self.head,
             str(self.head_word),
             self.dependency,
-            chr(12288)
+            chr(12288),
+            self.child_words
         )
 
     def __str__(self):

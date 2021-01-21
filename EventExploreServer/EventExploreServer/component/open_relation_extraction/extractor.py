@@ -1,6 +1,6 @@
 import logging
 from EventExploreServer.utils.utils import is_entity, is_named_entity
-from EventExploreServer.model.EntityPair import EntityPairUnit
+from EventExploreServer.model import EntityPairUnit
 from EventExploreServer.component.open_relation_extraction.extract_by_dsnf import ExtractByDSNF
 
 
@@ -17,6 +17,8 @@ class Extractor:
     entities = []  # 存储该句子中的可能实体
     entity_pairs = []  # 存储该句子中(满足一定条件)的可能实体对
     num = 0 # triple的num从0开始
+
+    # def __init__(self,):
 
     # def extract(self, origin_sentence, sentence, file_path, num):
     def extract(self, origin_sentence, sentence, idx_sentence=0, idx_document=0):
@@ -124,6 +126,59 @@ class Extractor:
                     self.entity_pairs.append(EntityPairUnit(self.entities[i], self.entities[j]))
                 j += 1
             i += 1
+
+    def get_entity_num_between(self, entity1, entity2, sentence):
+        """获得两个实体之间的实体数量
+        Args:
+            entity1: WordUnit，实体1
+            entity2: WordUnit，实体2
+        Returns:
+            num: int，两实体间的实体数量
+        """
+        num = 0
+        i = entity1.ID + 1
+        while i < entity2.ID:
+            if is_entity(sentence.words[i]):
+                num += 1
+            i += 1
+        return num
+
+
+
+class Extractor1:
+
+    def __init__(self, origin_sentence, sentence):
+        debug_logger.debug("Sentence: {:s}".format(origin_sentence))
+        debug_logger.debug("DP result:\n {:s}".format(sentence.to_string()))
+        debug_logger.debug("Name Entities: {:s}".format(', '.join(sentence.get_name_entities())))
+        self.triples = []
+        self.entities = self.get_entities(sentence)
+        self.entity_pairs = self.get_entity_pairs(sentence)
+        debug_logger.debug('Entities: {}'.format(list(map(str, self.entities))))  # # print list并不会调用list的元素的__str__
+        debug_logger.debug('Entity pairs: {}'.format(list(map(str, self.entity_pairs))))
+
+
+    def get_entities(self, sentence):
+        return [word for word in sentence.words if is_named_entity(word)]
+
+
+    def get_entity_pairs(self, sentence):
+        """组成实体对，限制实体对之间的实体数量不能超过4
+        Args:
+            sentence: SentenceUnit，句子单元
+        """
+        length = len(self.entities)
+        pairs = []
+        i = 0
+        while i < length:
+            j = i + 1
+            while j < length:
+                if (self.entities[i].lemma != self.entities[j].lemma and
+                    self.get_entity_num_between(self.entities[i], self.entities[j], sentence) <= 4):
+                    pairs.append(EntityPairUnit(self.entities[i], self.entities[j]))
+                j += 1
+            i += 1
+        return pairs
 
     def get_entity_num_between(self, entity1, entity2, sentence):
         """获得两个实体之间的实体数量

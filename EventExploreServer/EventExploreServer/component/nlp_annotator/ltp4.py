@@ -1,7 +1,6 @@
 from ltp import LTP
 from config import LTP4_MODEL_DIR
-from EventExploreServer.component.open_relation_extraction.nlp import NLP
-nlp = NLP()
+from EventExploreServer.component.nlp_annotator.nlp import nlp
 
 class NLPLTP:
 
@@ -22,12 +21,14 @@ if __name__ == '__main__':
     srl = ltp.srl(hidden)
     sdp = ltp.sdp(hidden)
 
-    print(seg)
-    print(pos)
-    print(ner)
-    print(dep)
-    print(srl)
-    print(sdp)
+    print('seg: ', seg)
+    print('hidden', hidden)
+    print('')
+    print('pos: ', pos)
+    print('ner: ', ner)
+    print('dep: ', dep)
+    print('srl: ', srl)
+    print('sdp: ', sdp)
 
     origin_sentences = ["他叫汤姆去拿外衣。", "他就读于复旦大学。"]
     lemmas, hidden = nlp.segment(origin_sentences)

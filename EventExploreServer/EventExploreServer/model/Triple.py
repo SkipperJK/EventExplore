@@ -1,6 +1,6 @@
 import unittest
 import logging
-from EventExploreServer.model.Word import WordUnit
+from EventExploreServer.model import WordUnit
 debug_logger = logging.getLogger('debug')
 
 class TripleUnit:

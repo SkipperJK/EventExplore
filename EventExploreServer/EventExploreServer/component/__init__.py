@@ -1,7 +1,6 @@
-from EventExploreServer.component.elasticsearch.search import exact_search_articles
-from EventExploreServer.component.open_relation_extraction.extract import extract_article
-from EventExploreServer.component.open_relation_extraction.extract import extract_text
 from EventExploreServer.component.word_link.WordGraph import WordGraph
-from EventExploreServer.component.elasticsearch.search import search_all
-from EventExploreServer.component.elasticsearch.search import search_articles
-from EventExploreServer.component.elasticsearch.search import exact_search_articles
+from EventExploreServer.component.elasticsearch.search import search_all_do, search_articles, exact_search_articles
+from EventExploreServer.component.learning_rules.extract_rules import extract_rules
+from EventExploreServer.component.open_relation_extraction.extract import extract_text, extract_article
+from EventExploreServer.component.open_relation_extraction.utils import loading_rules,saving_rule
+from EventExploreServer.component.nlp_annotator.annotation import annotate_sentence, annotate_text

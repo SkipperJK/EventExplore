@@ -1,4 +1,5 @@
-from EventExploreServer.model.Word import WordUnit
+import uuid
+from EventExploreServer.model import WordUnit
 
 
 class SentenceUnit:
@@ -11,6 +12,7 @@ class SentenceUnit:
     words = None
 
     def __init__(self, origin_sentence, nertags,  words):
+        self.id = uuid.uuid1().hex # 为每个句子生成唯一的uuid，vue前端处理每个句子需要唯一性
         self.origin_sentence = origin_sentence
         self.nertags = nertags
         self.words = words
@@ -18,6 +20,12 @@ class SentenceUnit:
             self.words[i].head_word = self.get_word_by_id(self.words[i].head)
         #self.nertags = nertags
         self.has_extracted = [False for _ in range(len(words))]  # 是否通过偏正短语已经被提取
+        # 序列化返回信息
+        self.segs = [word.lemma for word in self.words]
+        self.postags = [word.postag for word in self.words]
+        self.ners = self.get_name_entities()
+        self.dp_graph_dir = "../../static/images/" + self.id + '.png'
+
 
     def get_word_by_id(self, id):
         """根据id获得词单元word

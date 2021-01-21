@@ -1,6 +1,6 @@
 import logging
-from EventExploreServer.model.Word import WordUnit
-from EventExploreServer.model.Triple import TripleUnit
+from EventExploreServer.model import WordUnit
+from EventExploreServer.model import TripleUnit
 from EventExploreServer.utils.utils import is_entity, is_named_entity
 
 debug_logger = logging.getLogger('debug')
@@ -33,68 +33,20 @@ class ExtractByDSNF:
         self.idx_sentence = idx_sentence
         self.idx_document = idx_document
         self.num = num
-        self.center_word_of_e1 = None   # 偏正结构的中心词
-        self.center_word_of_e2 = None   # 偏正结构的中心词
+        # self.center_word_of_e1 = None   # 偏正结构的中心词
+        # self.center_word_of_e2 = None   # 偏正结构的中心词
         # self.file_path = file_path
         # self.num = num
         self.triples = []
-        self.expand_entity()    # 处理e1，e2偏正结构
-        debug_logger.debug('Level 1: Init 偏正结构对应的中心词：E1: {:s}, E2: {:s}'.format(
-            str(self.center_word_of_e1),
-            str(self.center_word_of_e2)
-        ))
-
-
-    def check_entity(self, entity):
-        """偏正短语：由修饰语和中心语组成，结构成分之间有修饰与被修饰关系的短语。（往往修饰词是命名实体）
-        处理偏正结构(奥巴马总统)，得到偏正部分(总统)，句子成分的主语或宾语 (中文普遍独特现象）
-           奥巴马<-(ATT)-总统
-           例如：奥巴马 总统 访问 中国。其中：奥巴马的偏正部分是 总统，总统在dp中和访问（verb）是SBV关系。
-           "the head word is a entity and modifiers are called the modifying attributives"
-           偏差修正构成NE，则进行标记。 例如：同济大学，对同济偏差修正（同济修饰大学）之后得到同济大学，同时同济大学NER标注为命名实体
-           问题？？？？ --》 习近平主席：习近平修饰主席，但是习近平就是命名实体。后期修改：根据pos提取会有问题？因为会把主席这个词置为True
-           #Solution： 其实不用判断是否是 机构实体 ，只需要对偏正结构标记即可，从而避免对偏正结构进行重复的关系元组提取。
-           NOTE: 如果不存在偏正结构，就返回entity本身。
-           NOTE: 最多返回entity的上一级修正中心
-        Args:
-            entity: WordUnit，待检验的实体
-        Returns:
-            head_word or entity: WordUnit，检验后的实体
-        """
-        head_word = entity.head_word  # 如果是偏正短语，则head_word就是中心词
-        if entity.dependency == 'ATT':
-            # if self.like_noun(head_word) and abs(entity.ID - head_word.ID) == 1:
-            if self.like_noun(head_word) :
-                # 处理机构命名实体分词被拆分情况，防止多次抽取
-                # start = min(entity.ID, head_word.ID)
-                # end = max(entity.ID, head_word.ID)
-                # debug_logger.debug((start, end))
-                # if (start-1, end-1) in [(item[1], item[2]) for item in self.sentence.nertags]:
-                #     self.sentence.is_extract_by_ne[head_word.ID-1] = True
-                # 标记所有的偏正部分，而不只是 机构命名实体
-                self.sentence.has_extracted[head_word.ID-1] = True
-                return head_word
-            else:
-                return entity
-        else:
-            return entity
-
-
-    def expand_entity(self):
-        self.center_word_of_e1 = self.check_entity(self.entity1)
-        self.center_word_of_e2 = self.check_entity(self.entity2)
-
-
-    def search_entity(self, modify):
-        """根据偏正部分(也有可能是实体)找原实体
-        Args:
-            word: WordUnit，偏正部分或者实体
-        Returns:
-        """
-        for word in self.sentence.words:
-            if word.head == modify.ID and word.dependency == 'ATT':
-                return word
-        return modify
+        # self.expand_entity()    # 处理e1，e2偏正结构
+        # debug_logger.debug('Level 1: Init 偏正结构对应的中心词：E1: {:s}, E2: {:s}'.format(
+        #     str(self.center_word_of_e1),
+        #     str(self.center_word_of_e2)
+        # ))
+        self.entity1_list = self.determine_entity_list(entity1)
+        self.entity2_list = self.determine_entity_list(entity2)
+        debug_logger.debug("Entity1 list: {}".format([e.lemma for e in self.entity1_list]))
+        debug_logger.debug("Entity2 list: {}".format([e.lemma for e in self.entity2_list]))
 
 
     def find_final_entity(self, entity):
@@ -109,6 +61,8 @@ class ExtractByDSNF:
         word_tmp = entity
         while word_tmp.dependency == 'ATT':
             word_tmp = word_tmp.head_word
+            if word_tmp.nertag: # 美国前任总统奥巴马访问中国。 避免提取：美国 访问 中国
+                return entity
         return word_tmp if word_tmp else entity
 
 
@@ -128,23 +82,6 @@ class ExtractByDSNF:
             return True
         else:
             return False
-
-
-    def get_entity_num_between(self, entity1, entity2):
-        """获得两个实体之间的实体数量
-        Args:
-            entity1: WordUnit，实体1
-            entity2: WordUnit，实体2
-        Returns:
-            num: int，两实体间的实体数量
-        """
-        num = 0
-        i = entity1.ID + 1
-        while i < entity2.ID:
-            if is_named_entity(self.sentence.words[i]):
-                num += 1
-            i += 1
-        return num
 
 
     def build_triple(self, entity1, entity2, relation, type="Other"):
@@ -186,6 +123,17 @@ class ExtractByDSNF:
         else:
             element_str = element.lemma
         return element_str
+
+
+    def determine_entity_list(self, entity):
+        entity_list = []
+        entity_list.append(entity)
+        entity_tmp = entity
+        while entity_tmp.dependency == 'ATT':
+            if not self.like_noun(entity_tmp.head_word): break
+            entity_list.append(entity_tmp.head_word)
+            entity_tmp = entity_tmp.head_word
+        return entity_list
 
 
     def E_NN_E(self, entity1, entity2):
@@ -270,22 +218,10 @@ class ExtractByDSNF:
         # # 但当"哈弗"的命名实体识别为"S-Ni"时，命名实体识别后将是："哈弗 大学"，因为：哈弗<-[ATT]-大学
         # # 得到的将是["奥巴马", "毕业于", "哈弗大学"]
         type = "DSNF4"
-        ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
-        ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
-
-        entity1_list = []
-        entity2_list = []
-        entity1_list.append(entity1)
-        entity2_list.append(entity2)
-        # 处理多级修饰
-        if ent1 != entity1 and abs(ent1.ID - entity1.ID) == 1:
-            entity1_list.append(ent1)
-            if ent1.dependency == 'ATT' and abs(ent1.head - entity1.ID) <= 3:
-                entity1_list.append(ent1.head_word)
-        if ent2 != entity2 and abs(ent2.ID - entity2.ID) == 1:
-            entity2_list.append(ent2)
-            if ent2.dependency == 'ATT' and abs(ent2.head - entity2.ID) <= 3:
-                entity2_list.append(ent2.head_word)
+        # entity1_list = self.determine_entity_list(entity1)
+        # entity2_list = self.determine_entity_list(entity2)
+        entity1_list = self.entity1_list
+        entity2_list = self.entity2_list
 
         relation_list = []
         e1_final = self.find_final_entity(entity1)
@@ -340,24 +276,16 @@ class ExtractByDSNF:
         """
         type2 = "DSNF2"
         type7 = "DSNF7"
-        ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
-        ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
-
-        entity1_list = []
-        entity2_list = []
-        entity1_list.append(entity1)
-        entity2_list.append(entity2)
-        # 处理多级修饰
-        if ent1 != entity1:
-        # if ent1 != entity1 and abs(ent1.ID - entity1.ID) == 1:
-            entity1_list.append(ent1)
-            if ent1.dependency == 'ATT' and abs(ent1.head - entity1.ID) <= 3:
-                entity1_list.append(ent1.head_word)
-        if ent2 != entity2:
-        # if ent2 != entity2 and abs(ent2.ID - entity2.ID) == 1:
-            entity2_list.append(ent2)
-            if ent2.dependency == 'ATT' and abs(ent2.head - entity2.ID) <= 3:
-                entity2_list.append(ent2.head_word)
+        # entity1_list = self.determine_entity_list(entity1)
+        # entity2_list = self.determine_entity_list(entity2)
+        entity1_list = self.entity1_list
+        entity2_list = self.entity2_list
+        if entity1_coo:
+            entity1_list = self.determine_entity_list(entity1_coo)
+            entity1_list[0] = entity1
+        if entity2_coo:
+            entity2_list = self.determine_entity_list(entity2_coo)
+            entity2_list[0] = entity2
 
         rels = []
         e1_final = self.find_final_entity(entity1)
@@ -498,22 +426,16 @@ class ExtractByDSNF:
             *: bool，获得三元组(True)，未获得三元组(False)
         """
         type='DSNF3'
-        entity1_list = []
-        entity2_list = []
-        entity1_list.append(entity1)
-        entity2_list.append(entity2)
-
-        ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
-        ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
-        # 处理多级修饰
-        if ent1 != entity1 and abs(ent1.ID - entity1.ID) == 1:
-            entity1_list.append(ent1)
-            if ent1.dependency == 'ATT' and abs(ent1.head - entity1.ID) <= 3:
-                entity1_list.append(ent1.head_word)
-        if ent2 != entity2 and abs(ent2.ID - entity2.ID) == 1:
-            entity2_list.append(ent2)
-            if ent2.dependency == 'ATT' and abs(ent2.head - entity2.ID) <= 3:
-                entity2_list.append(ent2.head_word)
+        # entity1_list = self.determine_entity_list(entity1)
+        # entity2_list = self.determine_entity_list(entity2)
+        entity1_list = self.entity1_list
+        entity2_list = self.entity2_list
+        if entity1_coo:
+            entity1_list = self.determine_entity_list(entity1_coo)
+            entity1_list[0] = entity1
+        if entity2_coo:
+            entity2_list = self.determine_entity_list(entity2_coo)
+            entity2_list[0] = entity2
 
         rels = []
         prep = ''  # 考虑特殊介词'被' or '由':
@@ -638,11 +560,6 @@ class ExtractByDSNF:
         Returns:
             *: bool，获得三元组(True)，未获得三元组(False)
         """
-        # ent1 = self.check_entity(entity1)
-        # ent2 = self.check_entity(entity2)
-        # debug_logger.debug('coordinate - 偏正修正部分：e1:{}, e2:{}'.format(ent1.lemma, ent2.lemma))
-        # ent1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
-        # ent2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
         ent1 = self.find_final_entity(entity1)
         ent2 = self.find_final_entity(entity2)
 
@@ -674,72 +591,4 @@ class ExtractByDSNF:
                 self.SBV_CMP_POB(entity1, entity2, entity2_coo=e2_coo, entity_flag='object')
 
         return False
-
-
-
-
-
-    # def entity_de_entity_NNT(self, entity1, entity2):
-    #     """形如"厦门大学的朱崇实校长"，实体+"的"+实体+名词
-    #     Args:
-    #         entity1: WordUnit，原实体1
-    #         entity2: WordUnit，原实体2
-    #     Returns:
-    #         *: bool，获得三元组(True)，未获得三元组(False)
-    #     """
-    #     # ent_1 = self.check_entity(entity1)
-    #     # ent_2 = self.check_entity(entity2)
-    #     # debug_logger.debug('entity_de_entity_NNT - 偏正修正部分：e1:{}, e2:{}'.format(ent_1.lemma, ent_2.lemma))
-    #     ent_1 = self.center_word_of_e1 if self.center_word_of_e1 else self.entity1
-    #     ent_2 = self.center_word_of_e2 if self.center_word_of_e2 else self.entity2
-    #     entity1_list = []
-    #     entity1_list.append(entity1)
-    #     entity2_list = []
-    #     entity2_list.append(entity2)
-    #     if ent_1 != entity1 and abs(ent_1.ID - entity1.ID) == 1:
-    #         entity1_list.append(ent_1)
-    #         # 豫Ｆ××××× 号 重型 半挂⻋
-    #         # 鄂Ｂ××××× 小轿车
-    #         if ent_1.dependency == 'ATT' and abs(ent_1.head - entity1.ID) <= 3:
-    #             entity1_list.append(ent_1.head_word)
-    #     if ent_2 != entity2 and abs(ent_2.ID - entity2.ID) == 1:
-    #         entity2_list.append(ent_2)
-    #         if ent_1.dependency == 'ATT' and abs(ent_1.head - entity1.ID) <= 3:
-    #             entity2_list.append(ent_1.head_word)
-    #
-    #     # 厦门大学的朱崇实校长
-    #     ok = False
-    #     if self.sentence.words[entity1.ID].lemma == '的':
-    #         if (entity1.head == entity2.head or entity1.head_word.head == entity2.ID
-    #                 and 'n' in entity1.head_word.postag and entity1.ID < entity1.head):
-    #             if entity2.postag == 'nh' and abs(entity2.ID - entity1.ID) < 4:
-    #                 self.build_triple(entity1, entity2, entity1.head_word)
-    #             ok = True
-    #
-    #     # 葛印楼所有的冀ＢXXXXXX号重型半挂车
-    #     # 葛印楼所有的车辆冀ＢXXXXXX小轿车
-    #     temp = None
-    #
-    #     if entity1.head == entity2.ID:
-    #         temp = entity2
-    #     # 鄂ＢXXXXXX小轿车
-    #     elif entity1.head == entity2.head:
-    #         temp = entity2.head_word
-    #     # 冀ＢXXXXXX 号 重型 半挂车
-    #     elif entity2.head_word:
-    #         if entity1.head == entity2.head_word.head:
-    #             temp = entity2.head_word.head_word
-    #     if temp:
-    #         i = entity1.ID
-    #         while i <= entity2.ID - 2:
-    #             word = self.sentence.words[i]
-    #             if word.lemma == '的' and word.dependency == 'RAD' and word.head_word.head == temp.ID:
-    #                 relation_list = []
-    #                 relation_list.append(word.head_word)
-    #                 relation_list.append(word)
-    #                 self.build_triple(entity1_list, entity2_list, relation_list)
-    #                 ok = True
-    #                 break
-    #             i += 1
-    #     return ok
 

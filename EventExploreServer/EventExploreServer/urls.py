@@ -17,6 +17,8 @@ from django.contrib import admin
 from django.urls import path
 from django.conf.urls import url
 from EventExploreServer import view
+# 绑定vue
+from django.views.generic import TemplateView
 
 urlpatterns = [
     # path('admin/', admin.site.urls),
@@ -27,6 +29,14 @@ urlpatterns = [
     url(r'^query/(?P<topic>\S{1,})/$', view.SearchView.as_view()),  # 关键字参数
     url(r'^extract/(?P<text>\S{1,})/$', view.OpenIEView.as_view()),
     url(r'^explore/(?P<topic>\S{1,})/$', view.EventExplore.as_view()),
+    url(r'^system/$', view.OpenREView.as_view()),
+    url(r'^main/$', view.MainView.as_view()),
+    url(r'^main/annotate/$', view.AnnotateView.as_view()),
+
+    # 使用vue前端
+    url(r'^vue/$', TemplateView.as_view(template_name='index.html')),
+    url(r'^vue/annotate/$', view.AnnotateView.as_view()),
+    url(r'^vue/label/$', view.LabelView.as_view()),
 ]
 '''
 路由配置模块就是ulrpatterns列表，列表的每个元素都是一项path

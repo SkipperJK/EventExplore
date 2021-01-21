@@ -56,3 +56,8 @@ LTP4_MODEL_DIR = os.path.join(PROJECT_DIR, 'data/pretrained_model/LTPModel')
 USER_DICT_DIR = os.path.join(PROJECT_DIR, 'data/user_dicts')
 
 ENTITY_DIR = os.path.join(PROJECT_DIR, 'data/entity')
+RULE_DIR = os.path.join(PROJECT_DIR, 'data/rules')
+
+# dp graph
+# PNG_DIR = os.path.join(PROJECT_DIR, 'data/pngs')
+PNG_DIR = os.path.join(PROJECT_DIR, 'appfront/static/images')
